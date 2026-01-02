@@ -7,6 +7,12 @@ from datetime import datetime
 from wve.models import SearchResult, VideoMetadata
 
 
+class SearchError(Exception):
+    """Error during video search."""
+
+    pass
+
+
 def search_videos(
     query: str,
     max_results: int = 10,
@@ -25,7 +31,13 @@ def search_videos(
 
     Returns:
         SearchResult containing video metadata
+
+    Raises:
+        SearchError: On network errors or yt-dlp failures
     """
+    if not query or not query.strip():
+        return SearchResult(query=query, max_results=max_results, videos=[])
+
     search_query = f"ytsearch{max_results}:{query}"
     if channel:
         search_query = f"{channel}/search?query={query}"
@@ -38,10 +50,17 @@ def search_videos(
         "--no-warnings",
     ]
 
-    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=60)
+    except subprocess.TimeoutExpired:
+        raise SearchError(f"Search timed out for query: {query}")
+    except OSError as e:
+        raise SearchError(f"yt-dlp not found or failed to run: {e}")
 
     if result.returncode != 0:
-        raise RuntimeError(f"yt-dlp failed: {result.stderr}")
+        if "No video found" in result.stderr or not result.stdout.strip():
+            return SearchResult(query=query, max_results=max_results, videos=[])
+        raise SearchError(f"yt-dlp failed: {result.stderr}")
 
     videos: list[VideoMetadata] = []
     for line in result.stdout.strip().split("\n"):
