@@ -5,6 +5,37 @@ from datetime import datetime
 from wve.models import ClusterResult, Extraction, Worldview, WorldviewPoint
 
 
+def check_ollama(host: str = "http://localhost:11434") -> bool:
+    """Check if Ollama is available and running."""
+    try:
+        import ollama
+
+        client = ollama.Client(host=host)
+        client.list()
+        return True
+    except Exception:
+        return False
+
+
+def ollama_generate(
+    prompt: str,
+    model: str = "llama3",
+    host: str = "http://localhost:11434",
+) -> dict:
+    """Generate response from Ollama and parse as JSON."""
+    import json
+
+    import ollama
+
+    client = ollama.Client(host=host)
+    response = client.generate(model=model, prompt=prompt, format="json")
+
+    try:
+        return json.loads(response["response"])
+    except (json.JSONDecodeError, KeyError):
+        return {}
+
+
 def synthesize_quick(
     clusters: ClusterResult,
     extraction: Extraction | None = None,
@@ -207,16 +238,10 @@ Format as JSON:
   ]
 }}"""
 
-    client = ollama.Client(host=ollama_host)
-    response = client.generate(model=model, prompt=prompt, format="json")
+    data = ollama_generate(prompt, model=model, host=ollama_host)
+    llm_points = data.get("worldview_points", [])
 
-    # Parse response
-    import json
-
-    try:
-        data = json.loads(response["response"])
-        llm_points = data.get("worldview_points", [])
-    except (json.JSONDecodeError, KeyError):
+    if not llm_points:
         # Fall back to medium synthesis if LLM fails
         return synthesize_medium(clusters, extraction, subject, n_points)
 
