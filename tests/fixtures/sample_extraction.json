@@ -1,0 +1,78 @@
+{
+  "keywords": [
+    {"term": "civilization", "score": 0.95, "frequency": 47, "sources": ["video1", "video2"]},
+    {"term": "nation-state", "score": 0.89, "frequency": 23, "sources": ["video1"]},
+    {"term": "praetorian", "score": 0.87, "frequency": 18, "sources": ["video1", "video2"]},
+    {"term": "estrogen", "score": 0.82, "frequency": 15, "sources": ["video1"]},
+    {"term": "testosterone", "score": 0.80, "frequency": 12, "sources": ["video1"]},
+    {"term": "bioelectric", "score": 0.78, "frequency": 14, "sources": ["video2"]},
+    {"term": "financialist", "score": 0.76, "frequency": 9, "sources": ["video1"]},
+    {"term": "kill-chain", "score": 0.74, "frequency": 7, "sources": ["video1"]},
+    {"term": "mesh network", "score": 0.72, "frequency": 6, "sources": ["video1"]},
+    {"term": "cellular", "score": 0.70, "frequency": 11, "sources": ["video2"]},
+    {"term": "frequency", "score": 0.68, "frequency": 13, "sources": ["video2"]},
+    {"term": "medicine", "score": 0.66, "frequency": 16, "sources": ["video2"]},
+    {"term": "empire", "score": 0.64, "frequency": 8, "sources": ["video1"]},
+    {"term": "venetian", "score": 0.62, "frequency": 5, "sources": ["video1"]},
+    {"term": "dutch", "score": 0.60, "frequency": 6, "sources": ["video1"]},
+    {"term": "psilocybin", "score": 0.58, "frequency": 4, "sources": ["video2"]},
+    {"term": "microbiome", "score": 0.56, "frequency": 5, "sources": ["video2"]},
+    {"term": "gut-brain", "score": 0.54, "frequency": 3, "sources": ["video2"]},
+    {"term": "five eyes", "score": 0.52, "frequency": 4, "sources": ["video1"]},
+    {"term": "english-speaking", "score": 0.50, "frequency": 7, "sources": ["video1"]}
+  ],
+  "entities": {
+    "PERSON": [
+      {"text": "Putin", "label": "PERSON", "frequency": 3, "sources": ["video1"]},
+      {"text": "Stalin", "label": "PERSON", "frequency": 2, "sources": ["video1"]},
+      {"text": "Mao", "label": "PERSON", "frequency": 2, "sources": ["video1"]},
+      {"text": "Constantine", "label": "PERSON", "frequency": 1, "sources": ["video1"]},
+      {"text": "Tucker Carlson", "label": "PERSON", "frequency": 1, "sources": ["video1"]}
+    ],
+    "GPE": [
+      {"text": "China", "label": "GPE", "frequency": 28, "sources": ["video1", "video2"]},
+      {"text": "Russia", "label": "GPE", "frequency": 19, "sources": ["video1"]},
+      {"text": "Iran", "label": "GPE", "frequency": 8, "sources": ["video1"]},
+      {"text": "Britain", "label": "GPE", "frequency": 7, "sources": ["video1"]},
+      {"text": "Venice", "label": "GPE", "frequency": 4, "sources": ["video1"]},
+      {"text": "Amsterdam", "label": "GPE", "frequency": 5, "sources": ["video1"]},
+      {"text": "Persia", "label": "GPE", "frequency": 6, "sources": ["video1"]}
+    ],
+    "ORG": [
+      {"text": "Five Eyes", "label": "ORG", "frequency": 4, "sources": ["video1"]},
+      {"text": "CIA", "label": "ORG", "frequency": 2, "sources": ["video1"]},
+      {"text": "MI6", "label": "ORG", "frequency": 2, "sources": ["video1"]},
+      {"text": "Dutch East India Company", "label": "ORG", "frequency": 1, "sources": ["video1"]}
+    ]
+  },
+  "phrases": [
+    {"phrase": "nation state", "count": 23, "sources": ["video1"]},
+    {"phrase": "mesh network", "count": 6, "sources": ["video1"]},
+    {"phrase": "self healing", "count": 5, "sources": ["video1"]},
+    {"phrase": "estrogen logic", "count": 8, "sources": ["video1"]},
+    {"phrase": "testosterone logic", "count": 4, "sources": ["video1"]},
+    {"phrase": "kill chain", "count": 7, "sources": ["video1"]},
+    {"phrase": "english speaking peoples", "count": 7, "sources": ["video1"]},
+    {"phrase": "third generation medicine", "count": 4, "sources": ["video2"]},
+    {"phrase": "bioelectric field", "count": 6, "sources": ["video2"]},
+    {"phrase": "cell wall", "count": 5, "sources": ["video2"]}
+  ],
+  "tfidf": [
+    {"term": "praetorian", "score": 0.42},
+    {"term": "civilization", "score": 0.38},
+    {"term": "bioelectric", "score": 0.35},
+    {"term": "estrogen", "score": 0.33},
+    {"term": "venetian", "score": 0.31},
+    {"term": "financialist", "score": 0.29},
+    {"term": "psilocybin", "score": 0.27},
+    {"term": "microbiome", "score": 0.25}
+  ],
+  "co_occurrences": [
+    {"pair": ["civilization", "nation-state"], "count": 18},
+    {"pair": ["estrogen", "testosterone"], "count": 12},
+    {"pair": ["praetorian", "empire"], "count": 8},
+    {"pair": ["bioelectric", "cellular"], "count": 9},
+    {"pair": ["china", "russia"], "count": 14},
+    {"pair": ["venice", "amsterdam"], "count": 4}
+  ]
+}

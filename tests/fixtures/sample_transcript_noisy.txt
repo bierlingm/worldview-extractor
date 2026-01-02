@@ -1,0 +1,55 @@
+=== Noisy transcript for robustness testing ===
+WEBVTT
+Kind: captions
+Language: en
+
+00:00:00.000 --> 00:00:05.000
+so so so basically what what what I'm saying
+
+00:00:03.000 --> 00:00:08.000
+so basically what I'm saying is that
+
+00:00:06.000 --> 00:00:11.000
+what I'm saying is that civilization
+
+civilization civilization is like
+is like a a mesh network
+mesh network you know
+you know what I mean
+
+<c>formatted</c> <b>text</b> with &amp; entities &gt; here
+
+🎯 The economy is going up! #winning @everyone 💪
+
+[00:15:23] timestamp in text [00:15:30]
+
+Esto es español mezclado with English text hier und da
+
+Some random bytes: café naïve résumé
+
+REPETITION REPETITION REPETITION REPETITION REPETITION
+repetition repetition repetition repetition repetition
+
+uh um like you know basically
+um uh like basically you know
+like um uh you know basically
+
+verylongwordwithoutspacesorpunctuationjustkeepsgoingandgoingforever
+
+Short.
+Even shorter
+.
+..
+...
+
+ALL CAPS SHOUTING FOR NO REASON AT ALL
+
+MiXeD cAsE tExT tHaT iS hArD tO rEaD
+
+Numbers everywhere: 123 456 789 $100 50% 3.14159
+
+Special chars: @#$%^&*()_+-=[]{}|;':",.<>?/~`
+
+The the the repeated repeated repeated words words words
+
+---END OF NOISY TRANSCRIPT---

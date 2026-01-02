@@ -1,0 +1,75 @@
+{
+  "clusters": [
+    {
+      "id": 0,
+      "label": "Civilizations vs Nation-States",
+      "centroid_terms": ["civilization", "nation-state", "mesh network"],
+      "members": [
+        {"term": "civilization", "distance": 0.12},
+        {"term": "nation-state", "distance": 0.18},
+        {"term": "mesh network", "distance": 0.23},
+        {"term": "self healing", "distance": 0.28},
+        {"term": "english-speaking", "distance": 0.31}
+      ],
+      "coherence": 0.72
+    },
+    {
+      "id": 1,
+      "label": "Praetorian Parasitic Empire",
+      "centroid_terms": ["praetorian", "empire", "venetian"],
+      "members": [
+        {"term": "praetorian", "distance": 0.10},
+        {"term": "empire", "distance": 0.15},
+        {"term": "venetian", "distance": 0.19},
+        {"term": "dutch", "distance": 0.24},
+        {"term": "amsterdam", "distance": 0.27},
+        {"term": "five eyes", "distance": 0.32}
+      ],
+      "coherence": 0.68
+    },
+    {
+      "id": 2,
+      "label": "Financialist Control Mechanisms",
+      "centroid_terms": ["financialist", "kill-chain", "collateral"],
+      "members": [
+        {"term": "financialist", "distance": 0.11},
+        {"term": "kill-chain", "distance": 0.16},
+        {"term": "banking", "distance": 0.22},
+        {"term": "assets", "distance": 0.29}
+      ],
+      "coherence": 0.65
+    },
+    {
+      "id": 3,
+      "label": "Estrogen vs Testosterone Logic",
+      "centroid_terms": ["estrogen", "testosterone", "logic"],
+      "members": [
+        {"term": "estrogen", "distance": 0.09},
+        {"term": "testosterone", "distance": 0.14},
+        {"term": "estrogen logic", "distance": 0.18},
+        {"term": "testosterone logic", "distance": 0.21}
+      ],
+      "coherence": 0.78
+    },
+    {
+      "id": 4,
+      "label": "Bioelectric Medicine",
+      "centroid_terms": ["bioelectric", "cellular", "frequency"],
+      "members": [
+        {"term": "bioelectric", "distance": 0.08},
+        {"term": "cellular", "distance": 0.13},
+        {"term": "frequency", "distance": 0.17},
+        {"term": "medicine", "distance": 0.20},
+        {"term": "cell wall", "distance": 0.24},
+        {"term": "psilocybin", "distance": 0.35},
+        {"term": "microbiome", "distance": 0.38}
+      ],
+      "coherence": 0.71
+    }
+  ],
+  "unclustered": [
+    "Putin",
+    "Tucker Carlson"
+  ],
+  "silhouette_score": 0.58
+}

@@ -1,0 +1,82 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "worldview-extractor"
+version = "0.1.0"
+description = "Synthesize a person's intellectual worldview from their public video appearances"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Moritz Bierling" }
+]
+keywords = ["worldview", "nlp", "youtube", "transcript", "synthesis"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Text Processing :: Linguistic",
+]
+
+dependencies = [
+    "click>=8.0",
+    "pydantic>=2.0",
+    "yake>=0.4.8",
+    "spacy>=3.5",
+    "scikit-learn>=1.0",
+    "sentence-transformers>=2.2",
+    "numpy>=1.24",
+    "rich>=13.0",
+    "tomli>=2.0;python_version<'3.11'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "pytest-mock>=3.10",
+    "pytest-timeout>=2.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+]
+ollama = [
+    "ollama>=0.1",
+]
+
+[project.scripts]
+wve = "wve.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/bierlingm/worldview-extractor"
+Repository = "https://github.com/bierlingm/worldview-extractor"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wve"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "robustness: tests for noise/edge cases",
+    "quality: tests for extraction/synthesis quality",
+    "integration: end-to-end integration tests",
+]
+timeout = 60
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
