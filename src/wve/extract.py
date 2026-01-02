@@ -156,13 +156,21 @@ def extract_tfidf(
     if not texts:
         return []
 
-    vectorizer = TfidfVectorizer(
-        max_features=max_features,
-        stop_words="english",
-        ngram_range=(1, 2),
-        min_df=1,
-        max_df=0.95,
-    )
+    # For single document, use simpler settings
+    if len(texts) == 1:
+        vectorizer = TfidfVectorizer(
+            max_features=max_features,
+            stop_words="english",
+            ngram_range=(1, 2),
+        )
+    else:
+        vectorizer = TfidfVectorizer(
+            max_features=max_features,
+            stop_words="english",
+            ngram_range=(1, 2),
+            min_df=1,
+            max_df=0.95,
+        )
 
     tfidf_matrix = vectorizer.fit_transform(texts)
     feature_names = vectorizer.get_feature_names_out()
