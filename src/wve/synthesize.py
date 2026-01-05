@@ -1,8 +1,10 @@
 """Worldview synthesis from extracted and clustered data."""
 
 from datetime import datetime
+from pathlib import Path
 
 from wve.models import ClusterResult, Extraction, Worldview, WorldviewPoint
+from wve.quotes import QuoteCollection, extract_quotes_from_dir
 
 
 def check_ollama(host: str = "http://localhost:11434") -> bool:
@@ -202,7 +204,7 @@ def synthesize_deep(
         entities.append(f"{label}: {', '.join(e.text for e in ents[:5])}")
     entities_summary = "\n".join(entities) if entities else "None extracted"
 
-    prompt = f"""You are analyzing transcripts from video appearances of {subject} to extract their core worldview.
+    prompt = f"""You are analyzing transcripts from video appearances of {subject} to extract their DISTINCTIVE worldview.
 
 ## Extracted Themes
 {cluster_summary}
@@ -218,13 +220,23 @@ def synthesize_deep(
 
 ---
 
-Based on this evidence, identify the {n_points} most fundamental aspects of {subject}'s worldview.
+Your task: Identify {n_points} beliefs or positions that make {subject}'s worldview DISTINCTIVE.
+
+CRITICAL REQUIREMENTS:
+- Focus on what {subject} believes that MOST PEOPLE DON'T
+- Identify CONTRARIAN or UNCONVENTIONAL positions
+- Be SPECIFIC: use proper nouns, specific claims, named concepts, concrete examples
+- AVOID platitudes like "X is important", "Y matters", "believes in Z"
+- Each point should be something a reader would find surprising or thought-provoking
 
 For each point:
-1. State the core belief/position concisely (1-2 sentences)
-2. Provide a brief elaboration (2-3 sentences)
-3. List supporting evidence from the extracted data
-4. Assign a confidence score (0.0-1.0) based on how strongly the evidence supports this point
+1. State a specific, distinctive belief (not a generic observation)
+2. Elaborate with concrete details or named concepts they reference
+3. List specific evidence (exact terms, phrases, entities from the data)
+4. Confidence score (0.0-1.0) - higher if multiple sources support this distinctive view
+
+BAD EXAMPLE: "Believes education is important" (generic, everyone believes this)
+GOOD EXAMPLE: "Argues that credentialism has corrupted education, preferring apprenticeship models like those of Renaissance Florence" (specific, contrarian, named reference)
 
 Format as JSON:
 {{
@@ -304,3 +316,106 @@ def save_worldview(worldview: Worldview, output_path: str) -> None:
     """Save worldview to JSON."""
     with open(output_path, "w") as f:
         f.write(worldview.model_dump_json(indent=2))
+
+
+# === Quote-Grounded Synthesis (v0.2) ===
+
+
+QUOTE_GROUNDED_PROMPT = """You are analyzing transcripts from {subject} to extract their DISTINCTIVE worldview.
+
+## Notable Quotes (verbatim from transcripts)
+{quotes_section}
+
+---
+
+Your task: Identify {n_points} beliefs or positions that make {subject}'s worldview DISTINCTIVE.
+
+CRITICAL REQUIREMENTS:
+- Every point MUST be supported by at least 2 actual quotes from above
+- Focus on what {subject} believes that MOST PEOPLE DON'T
+- Be SPECIFIC: use the exact language and concepts from their quotes
+- AVOID generic platitudes - if you can't ground it in quotes, don't include it
+
+For each point:
+1. State the distinctive belief in your own words
+2. Provide 2-3 EXACT QUOTES (verbatim) that support this belief
+3. Explain what makes this view contrarian or distinctive
+4. Confidence based on how strongly the quotes support this interpretation
+
+Format as JSON:
+{{
+  "worldview_points": [
+    {{
+      "point": "...",
+      "supporting_quotes": ["exact quote 1", "exact quote 2"],
+      "what_makes_it_distinctive": "...",
+      "confidence": 0.0
+    }}
+  ]
+}}"""
+
+
+def synthesize_grounded(
+    transcript_dir: Path | str,
+    subject: str,
+    n_points: int = 5,
+    model: str = "llama3",
+    ollama_host: str = "http://localhost:11434",
+) -> dict:
+    """Quote-grounded synthesis using actual quotes from transcripts.
+    
+    This is the v0.2 approach: every worldview point is backed by verbatim quotes.
+    
+    Args:
+        transcript_dir: Directory containing transcript .txt files
+        subject: Name of the person being analyzed
+        n_points: Number of worldview points
+        model: Ollama model name
+        ollama_host: Ollama API endpoint
+        
+    Returns:
+        Dict with worldview points, each backed by exact quotes
+    """
+    transcript_path = Path(transcript_dir)
+    
+    # Extract quotes first
+    collection = extract_quotes_from_dir(transcript_path, max_quotes=100, min_score=0.25)
+    
+    if not collection.quotes:
+        return {
+            "subject": subject,
+            "worldview_points": [],
+            "error": "No notable quotes found in transcripts",
+        }
+    
+    # Build quotes section for prompt
+    quotes_section = "\n".join(
+        f'- "{q.text}" (from {q.source_id})'
+        for q in collection.quotes[:50]  # Limit for context window
+    )
+    
+    prompt = QUOTE_GROUNDED_PROMPT.format(
+        subject=subject,
+        quotes_section=quotes_section,
+        n_points=n_points,
+    )
+    
+    try:
+        data = ollama_generate(prompt, model=model, host=ollama_host)
+        points = data.get("worldview_points", [])
+    except Exception as e:
+        # Return quotes without synthesis if LLM fails
+        return {
+            "subject": subject,
+            "worldview_points": [],
+            "quotes": [q.model_dump() for q in collection.quotes[:30]],
+            "error": f"LLM synthesis failed: {e}",
+            "source_count": collection.source_count,
+        }
+    
+    return {
+        "subject": subject,
+        "worldview_points": points,
+        "source_count": collection.source_count,
+        "total_quotes_analyzed": len(collection.quotes),
+    }

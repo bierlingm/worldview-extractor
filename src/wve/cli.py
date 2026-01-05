@@ -18,6 +18,1577 @@ def main(ctx: click.Context, debug: bool) -> None:
     ctx.obj["debug"] = debug
 
 
+# === Identity Commands (v0.2) ===
+
+
+@main.group()
+def identity() -> None:
+    """Manage subject identities (v0.2)."""
+    pass
+
+
+@identity.command("create")
+@click.argument("name")
+@click.option("--slug", "-s", help="Custom slug (default: derived from name)")
+@click.option("--channel", "-c", help="YouTube channel URL")
+@click.option("--website", "-w", help="Personal website URL")
+@click.option("--alias", "-a", multiple=True, help="Alternative names")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def identity_create(
+    name: str,
+    slug: str | None,
+    channel: str | None,
+    website: str | None,
+    alias: tuple[str, ...],
+    as_json: bool,
+) -> None:
+    """Create a new identity profile for NAME."""
+    from wve.identity import create_identity
+
+    try:
+        identity = create_identity(
+            display_name=name,
+            slug=slug,
+            aliases=list(alias) if alias else None,
+            channel_url=channel,
+            website=website,
+        )
+
+        if as_json:
+            click.echo(identity.model_dump_json(indent=2))
+        else:
+            click.echo(f"Created identity: {identity.slug}")
+            click.echo(f"  Name: {identity.display_name}")
+            if identity.aliases:
+                click.echo(f"  Aliases: {', '.join(identity.aliases)}")
+            if identity.channels:
+                click.echo(f"  Channels: {len(identity.channels)}")
+            if identity.websites:
+                click.echo(f"  Website: {identity.websites[0]}")
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+
+@identity.command("list")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def identity_list(as_json: bool) -> None:
+    """List all known identities."""
+    from wve.identity import list_identities
+
+    identities = list_identities()
+
+    if as_json:
+        click.echo(json.dumps([i.model_dump() for i in identities], indent=2, default=str))
+    elif not identities:
+        click.echo("No identities found. Create one with: wve identity create <name>")
+    else:
+        for i in identities:
+            channels = len(i.channels)
+            confirmed = len(i.confirmed_videos)
+            click.echo(f"{i.slug:20} {i.display_name:25} {channels} channel(s), {confirmed} confirmed")
+
+
+@identity.command("show")
+@click.argument("slug")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def identity_show(slug: str, as_json: bool) -> None:
+    """Show details for identity SLUG."""
+    from wve.identity import load_identity
+
+    try:
+        identity = load_identity(slug)
+
+        if as_json:
+            click.echo(identity.model_dump_json(indent=2))
+        else:
+            click.echo(f"Identity: {identity.display_name}")
+            click.echo(f"  Slug: {identity.slug}")
+            if identity.aliases:
+                click.echo(f"  Aliases: {', '.join(identity.aliases)}")
+            click.echo(f"  Created: {identity.created_at.strftime('%Y-%m-%d')}")
+            click.echo(f"  Updated: {identity.updated_at.strftime('%Y-%m-%d')}")
+
+            if identity.channels:
+                click.echo("\n  Channels:")
+                for ch in identity.channels:
+                    v = " (verified)" if ch.verified else ""
+                    click.echo(f"    - {ch.url}{v}")
+
+            if identity.websites:
+                click.echo(f"\n  Websites: {', '.join(identity.websites)}")
+
+            click.echo(f"\n  Confirmed videos: {len(identity.confirmed_videos)}")
+            click.echo(f"  Rejected videos: {len(identity.rejected_videos)}")
+            click.echo(f"  Trusted channels: {len(identity.trusted_channels)}")
+    except FileNotFoundError:
+        click.echo(f"Identity not found: {slug}", err=True)
+        raise SystemExit(1)
+
+
+@identity.command("add-channel")
+@click.argument("slug")
+@click.argument("url")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def identity_add_channel(slug: str, url: str, as_json: bool) -> None:
+    """Add a YouTube channel URL to identity SLUG."""
+    from wve.identity import add_channel_to_identity
+
+    try:
+        identity = add_channel_to_identity(slug, url)
+
+        if as_json:
+            click.echo(identity.model_dump_json(indent=2))
+        else:
+            click.echo(f"Added channel to {identity.display_name}")
+            click.echo(f"  Total channels: {len(identity.channels)}")
+    except (FileNotFoundError, ValueError) as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+
+@identity.command("add-video")
+@click.argument("slug")
+@click.argument("video", nargs=-1, required=True)
+@click.option("--reject", is_flag=True, help="Mark as rejected instead of confirmed")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def identity_add_video(slug: str, video: tuple[str, ...], reject: bool, as_json: bool) -> None:
+    """Add confirmed (or rejected) video(s) to identity SLUG."""
+    from wve.identity import add_video_to_identity, extract_video_id
+
+    try:
+        for v in video:
+            vid = extract_video_id(v)
+            identity = add_video_to_identity(slug, vid, confirmed=not reject)
+
+        if as_json:
+            click.echo(identity.model_dump_json(indent=2))
+        else:
+            action = "rejected" if reject else "confirmed"
+            click.echo(f"Added {len(video)} {action} video(s) to {identity.display_name}")
+            click.echo(f"  Confirmed: {len(identity.confirmed_videos)}")
+            click.echo(f"  Rejected: {len(identity.rejected_videos)}")
+    except FileNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+
+@identity.command("delete")
+@click.argument("slug")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def identity_delete(slug: str, yes: bool, as_json: bool) -> None:
+    """Delete identity SLUG."""
+    from wve.identity import delete_identity, load_identity
+
+    try:
+        identity = load_identity(slug)
+    except FileNotFoundError:
+        click.echo(f"Identity not found: {slug}", err=True)
+        raise SystemExit(1)
+
+    if not yes and not as_json:
+        if not click.confirm(f"Delete identity '{identity.display_name}'?"):
+            click.echo("Cancelled.")
+            return
+
+    delete_identity(slug)
+
+    if as_json:
+        click.echo(json.dumps({"deleted": slug, "success": True}))
+    else:
+        click.echo(f"Deleted: {slug}")
+
+
+# === Discovery Commands (v0.2) ===
+
+
+@main.command()
+@click.argument("query")
+@click.option("--max-results", "-n", default=20, help="Maximum videos to search")
+@click.option("--identity", "-i", "identity_slug", help="Use existing identity for context")
+@click.option("--channel", "-c", help="Filter to specific channel URL")
+@click.option("--min-duration", default=5, help="Minimum video length in minutes")
+@click.option("--max-duration", default=180, help="Maximum video length in minutes")
+@click.option("--output", "-o", type=click.Path(), help="Save candidates to JSON file")
+@click.option("--strict", is_flag=True, help="Only include videos with full query in title")
+@click.option("--auto-classify", is_flag=True, help="Auto-classify candidates (for scripting)")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON (for automation)")
+def discover(
+    query: str,
+    max_results: int,
+    identity_slug: str | None,
+    channel: str | None,
+    min_duration: int,
+    max_duration: int,
+    output: str | None,
+    strict: bool,
+    auto_classify: bool,
+    as_json: bool,
+) -> None:
+    """Search for videos WITHOUT downloading - returns candidates for confirmation.
+    
+    Unlike 'search', this classifies candidates as likely/uncertain/false_positive
+    and supports identity-based context for better accuracy.
+    """
+    from rich.console import Console
+    from rich.table import Table
+
+    from wve.classify import CandidateSet, VideoCandidate, classify_candidates
+    from wve.identity import load_identity
+    from wve.search import search_videos
+
+    console = Console(stderr=True)
+    identity = None
+
+    # Load identity if provided
+    if identity_slug:
+        try:
+            identity = load_identity(identity_slug)
+            if not as_json:
+                console.print(f"Using identity: {identity.display_name}")
+        except FileNotFoundError:
+            console.print(f"[red]Identity not found: {identity_slug}[/red]")
+            raise SystemExit(1)
+
+    # Search
+    if not as_json:
+        console.print(f"Searching for: {query}...")
+
+    results = search_videos(
+        query,
+        max_results=max_results,
+        min_duration=min_duration,
+        max_duration=max_duration,
+        channel=channel,
+    )
+
+    # Convert to candidates
+    candidates = [
+        VideoCandidate(
+            id=v.id,
+            title=v.title,
+            channel=v.channel,
+            channel_id=v.channel_id,
+            duration_seconds=v.duration_seconds,
+            url=v.url,
+            published=v.published,
+        )
+        for v in results.videos
+    ]
+
+    # Apply strict filter
+    if strict:
+        query_lower = query.lower()
+        candidates = [c for c in candidates if query_lower in c.title.lower()]
+
+    # Classify
+    classify_candidates(candidates, query, identity)
+
+    # Build candidate set
+    candidate_set = CandidateSet(
+        query=query,
+        identity_slug=identity_slug,
+        candidates=candidates,
+    )
+
+    # Output
+    if as_json:
+        click.echo(candidate_set.model_dump_json(indent=2))
+    else:
+        # Group by classification
+        likely = [c for c in candidates if c.classification == "likely"]
+        uncertain = [c for c in candidates if c.classification == "uncertain"]
+        false_pos = [c for c in candidates if c.classification == "false_positive"]
+
+        console.print(f"\nFound {len(candidates)} candidates for \"{query}\"\n")
+
+        if likely:
+            console.print("[green bold]LIKELY MATCHES[/green bold]")
+            table = Table(show_header=True, header_style="bold")
+            table.add_column("#", style="dim", width=3)
+            table.add_column("Title", width=50)
+            table.add_column("Channel", width=20)
+            table.add_column("Duration", width=8)
+            table.add_column("Confidence", width=10)
+
+            for i, c in enumerate(likely, 1):
+                dur = f"{c.duration_seconds // 60}m"
+                conf = f"{c.confidence:.0%}"
+                table.add_row(str(i), c.title[:50], c.channel[:20], dur, conf)
+            console.print(table)
+            console.print()
+
+        if uncertain:
+            console.print("[yellow bold]UNCERTAIN[/yellow bold]")
+            table = Table(show_header=True, header_style="bold")
+            table.add_column("#", style="dim", width=3)
+            table.add_column("Title", width=50)
+            table.add_column("Channel", width=20)
+            table.add_column("Reason", width=30)
+
+            for i, c in enumerate(uncertain, len(likely) + 1):
+                table.add_row(str(i), c.title[:50], c.channel[:20], c.classification_reason or "")
+            console.print(table)
+            console.print()
+
+        if false_pos:
+            console.print("[red bold]FALSE POSITIVES[/red bold]")
+            table = Table(show_header=True, header_style="bold")
+            table.add_column("#", style="dim", width=3)
+            table.add_column("Title", width=50)
+            table.add_column("Reason", width=40)
+
+            for i, c in enumerate(false_pos, len(likely) + len(uncertain) + 1):
+                table.add_row(str(i), c.title[:50], c.classification_reason or "")
+            console.print(table)
+            console.print()
+
+        console.print(f"[dim]Summary: {len(likely)} likely, {len(uncertain)} uncertain, {len(false_pos)} false positives[/dim]")
+
+        if output:
+            with open(output, "w") as f:
+                f.write(candidate_set.model_dump_json(indent=2))
+            console.print(f"\nSaved to: {output}")
+        else:
+            console.print("\n[dim]Use --output/-o to save candidates for confirmation[/dim]")
+
+
+@main.command()
+@click.argument("input", type=click.Path(exists=True))
+@click.option("--identity", "-i", "identity_slug", help="Save confirmations to identity")
+@click.option("--output", "-o", type=click.Path(), help="Save confirmed candidates to JSON")
+@click.option("--accept", "accept_ids", help="Comma-separated indices to accept (1-based)")
+@click.option("--reject", "reject_ids", help="Comma-separated indices to reject (1-based)")
+@click.option("--accept-likely", is_flag=True, help="Auto-accept all 'likely' candidates")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompts")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def confirm(
+    input: str,
+    identity_slug: str | None,
+    output: str | None,
+    accept_ids: str | None,
+    reject_ids: str | None,
+    accept_likely: bool,
+    yes: bool,
+    as_json: bool,
+) -> None:
+    """Confirm or reject video candidates from a candidates.json file.
+    
+    Interactive mode (default): prompts for each candidate.
+    Batch mode: use --accept and --reject with comma-separated indices.
+    """
+    from pathlib import Path
+
+    from rich.console import Console
+    from rich.prompt import Confirm, Prompt
+    from rich.table import Table
+
+    from wve.classify import CandidateSet, update_identity_from_feedback
+    from wve.identity import load_identity, save_identity
+
+    console = Console(stderr=True)
+
+    # Load candidates
+    with open(input) as f:
+        candidate_set = CandidateSet.model_validate_json(f.read())
+
+    candidates = candidate_set.candidates
+    if not candidates:
+        if as_json:
+            click.echo(json.dumps({"confirmed": [], "rejected": [], "count": 0}))
+        else:
+            console.print("[yellow]No candidates to confirm[/yellow]")
+        return
+
+    # Load identity if provided
+    identity = None
+    if identity_slug:
+        try:
+            identity = load_identity(identity_slug)
+        except FileNotFoundError:
+            console.print(f"[red]Identity not found: {identity_slug}[/red]")
+            raise SystemExit(1)
+    elif candidate_set.identity_slug:
+        try:
+            identity = load_identity(candidate_set.identity_slug)
+            identity_slug = candidate_set.identity_slug
+        except FileNotFoundError:
+            pass
+
+    # Parse accept/reject indices
+    def parse_indices(s: str | None) -> set[int]:
+        if not s:
+            return set()
+        indices = set()
+        for part in s.split(","):
+            part = part.strip()
+            if "-" in part:
+                start, end = part.split("-", 1)
+                indices.update(range(int(start), int(end) + 1))
+            else:
+                indices.add(int(part))
+        return indices
+
+    accept_set = parse_indices(accept_ids)
+    reject_set = parse_indices(reject_ids)
+
+    # Batch mode or interactive
+    is_batch = bool(accept_ids or reject_ids or accept_likely)
+
+    if is_batch:
+        # Batch mode
+        for i, c in enumerate(candidates, 1):
+            if accept_likely and c.classification == "likely":
+                c.confirmed = True
+                c.rejected = False
+            elif i in accept_set:
+                c.confirmed = True
+                c.rejected = False
+            elif i in reject_set:
+                c.confirmed = False
+                c.rejected = True
+    else:
+        # Interactive mode
+        if as_json:
+            console.print("[red]Interactive mode not supported with --json. Use --accept/--reject.[/red]")
+            raise SystemExit(1)
+
+        console.print(f"\nConfirming {len(candidates)} candidates for \"{candidate_set.query}\"\n")
+        console.print("[dim]Enter: y=yes, n=no, s=skip, q=quit[/dim]\n")
+
+        for i, c in enumerate(candidates, 1):
+            # Show candidate info
+            dur = f"{c.duration_seconds // 60}m"
+            cls_color = {"likely": "green", "uncertain": "yellow", "false_positive": "red"}.get(
+                c.classification or "", "white"
+            )
+            console.print(
+                f"[bold][{i}/{len(candidates)}][/bold] [{cls_color}]{c.classification or 'unknown'}[/{cls_color}]"
+            )
+            console.print(f"  Title: {c.title}")
+            console.print(f"  Channel: {c.channel} | Duration: {dur}")
+            console.print(f"  URL: {c.url}")
+            if c.classification_reason:
+                console.print(f"  [dim]Reason: {c.classification_reason}[/dim]")
+
+            choice = Prompt.ask("  Confirm?", choices=["y", "n", "s", "q"], default="s")
+
+            if choice == "y":
+                c.confirmed = True
+                c.rejected = False
+            elif choice == "n":
+                c.confirmed = False
+                c.rejected = True
+            elif choice == "q":
+                console.print("[yellow]Quit early[/yellow]")
+                break
+            # s = skip, leave as-is
+
+            console.print()
+
+    # Update identity with feedback
+    if identity:
+        for c in candidates:
+            if c.confirmed is True:
+                update_identity_from_feedback(identity, c, confirmed=True)
+            elif c.rejected is True:
+                update_identity_from_feedback(identity, c, confirmed=False)
+        save_identity(identity)
+        if not as_json:
+            console.print(f"[green]Updated identity: {identity.display_name}[/green]")
+
+    # Build results
+    confirmed = [c for c in candidates if c.confirmed is True]
+    rejected = [c for c in candidates if c.rejected is True]
+    skipped = [c for c in candidates if c.confirmed is None and c.rejected is None]
+
+    # Output
+    if as_json:
+        result = {
+            "confirmed": [c.model_dump() for c in confirmed],
+            "rejected": [c.model_dump() for c in rejected],
+            "skipped": [c.model_dump() for c in skipped],
+            "count": {"confirmed": len(confirmed), "rejected": len(rejected), "skipped": len(skipped)},
+        }
+        click.echo(json.dumps(result, indent=2, default=str))
+    else:
+        console.print(f"\n[green]Confirmed: {len(confirmed)}[/green]")
+        console.print(f"[red]Rejected: {len(rejected)}[/red]")
+        console.print(f"[dim]Skipped: {len(skipped)}[/dim]")
+
+    # Save confirmed candidates
+    if output and confirmed:
+        confirmed_set = CandidateSet(
+            query=candidate_set.query,
+            identity_slug=identity_slug,
+            candidates=confirmed,
+        )
+        with open(output, "w") as f:
+            f.write(confirmed_set.model_dump_json(indent=2))
+        if not as_json:
+            console.print(f"\nSaved {len(confirmed)} confirmed candidates to: {output}")
+
+
+@main.command()
+@click.argument("input", type=click.Path(exists=True), required=False)
+@click.option("--identity", "-i", "identity_slug", help="Fetch all confirmed videos from identity")
+@click.option("--output-dir", "-o", type=click.Path(), default="./transcripts", help="Output directory")
+@click.option("--lang", default="en", help="Preferred language code")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def fetch(
+    input: str | None,
+    identity_slug: str | None,
+    output_dir: str,
+    lang: str,
+    as_json: bool,
+) -> None:
+    """Download transcripts for confirmed videos.
+    
+    INPUT can be a confirmed.json file from 'wve confirm'.
+    Alternatively, use --identity to fetch all confirmed videos from an identity.
+    """
+    from pathlib import Path
+
+    from rich.console import Console
+    from rich.progress import Progress
+
+    from wve.classify import CandidateSet
+    from wve.identity import load_identity
+    from wve.models import VideoMetadata
+    from wve.transcripts import download_transcript
+
+    console = Console(stderr=True)
+
+    # Collect video URLs to fetch
+    videos_to_fetch: list[tuple[str, str, str]] = []  # (id, url, title)
+
+    if identity_slug:
+        try:
+            identity = load_identity(identity_slug)
+        except FileNotFoundError:
+            console.print(f"[red]Identity not found: {identity_slug}[/red]")
+            raise SystemExit(1)
+
+        for vid_id in identity.confirmed_videos:
+            url = f"https://www.youtube.com/watch?v={vid_id}"
+            videos_to_fetch.append((vid_id, url, ""))
+
+        if not as_json:
+            console.print(f"Fetching {len(videos_to_fetch)} confirmed videos from {identity.display_name}")
+
+    elif input:
+        with open(input) as f:
+            candidate_set = CandidateSet.model_validate_json(f.read())
+
+        for c in candidate_set.candidates:
+            if c.confirmed:
+                videos_to_fetch.append((c.id, c.url, c.title))
+
+        if not as_json:
+            console.print(f"Fetching {len(videos_to_fetch)} videos from {input}")
+
+    else:
+        console.print("[red]Provide either INPUT file or --identity[/red]")
+        raise SystemExit(1)
+
+    if not videos_to_fetch:
+        if as_json:
+            click.echo(json.dumps({"fetched": 0, "transcripts": []}))
+        else:
+            console.print("[yellow]No confirmed videos to fetch[/yellow]")
+        return
+
+    # Download transcripts
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    results = []
+    failed = []
+
+    if as_json:
+        for vid_id, url, title in videos_to_fetch:
+            transcript_path = download_transcript(url, output_path, lang)
+            if transcript_path:
+                results.append({"id": vid_id, "path": str(transcript_path)})
+            else:
+                failed.append(vid_id)
+    else:
+        with Progress(console=console) as progress:
+            task = progress.add_task("Downloading transcripts...", total=len(videos_to_fetch))
+
+            for vid_id, url, title in videos_to_fetch:
+                progress.update(task, description=f"[dim]{vid_id}[/dim]")
+                transcript_path = download_transcript(url, output_path, lang)
+                if transcript_path:
+                    results.append({"id": vid_id, "path": str(transcript_path)})
+                else:
+                    failed.append(vid_id)
+                progress.advance(task)
+
+    # Output
+    if as_json:
+        click.echo(json.dumps({
+            "fetched": len(results),
+            "failed": len(failed),
+            "transcripts": results,
+            "output_dir": str(output_path),
+        }, indent=2))
+    else:
+        console.print(f"\n[green]Fetched: {len(results)} transcripts[/green]")
+        if failed:
+            console.print(f"[red]Failed: {len(failed)}[/red]")
+            for vid_id in failed[:5]:
+                console.print(f"  [dim]{vid_id}[/dim]")
+            if len(failed) > 5:
+                console.print(f"  [dim]... and {len(failed) - 5} more[/dim]")
+        console.print(f"\nSaved to: {output_path}/")
+
+
+# === Source Commands (v0.2) ===
+
+
+@main.command("from-channel")
+@click.argument("channel_url")
+@click.option("--output-dir", "-o", type=click.Path(), default="./transcripts", help="Output directory")
+@click.option("--max-videos", "-n", default=50, help="Maximum videos to fetch")
+@click.option("--min-duration", default=5, help="Minimum video length in minutes")
+@click.option("--max-duration", default=180, help="Maximum video length in minutes")
+@click.option("--after", help="Only videos after date (YYYY-MM-DD)")
+@click.option("--before", help="Only videos before date (YYYY-MM-DD)")
+@click.option("--lang", default="en", help="Preferred transcript language")
+@click.option("--identity", "-i", "identity_slug", help="Add to identity's confirmed videos")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def from_channel(
+    channel_url: str,
+    output_dir: str,
+    max_videos: int,
+    min_duration: int,
+    max_duration: int,
+    after: str | None,
+    before: str | None,
+    lang: str,
+    identity_slug: str | None,
+    as_json: bool,
+) -> None:
+    """Scrape all videos from a YouTube channel.
+    
+    This is the most reliable way to get content from someone with their own channel.
+    All videos are automatically confirmed (no search ambiguity).
+    """
+    import subprocess
+    from datetime import datetime
+    from pathlib import Path
+
+    from rich.console import Console
+    from rich.progress import Progress
+
+    from wve.identity import add_video_to_identity, load_identity, save_identity
+    from wve.transcripts import download_transcript
+
+    console = Console(stderr=True)
+
+    # Parse date filters
+    after_date = datetime.strptime(after, "%Y-%m-%d") if after else None
+    before_date = datetime.strptime(before, "%Y-%m-%d") if before else None
+
+    # Get channel videos using yt-dlp
+    if not as_json:
+        console.print(f"Fetching video list from: {channel_url}")
+
+    cmd = [
+        "yt-dlp",
+        channel_url,
+        "--flat-playlist",
+        "--dump-json",
+        "--no-warnings",
+        f"--playlist-end={max_videos * 2}",  # Fetch extra to filter
+    ]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=120)
+    except subprocess.TimeoutExpired:
+        console.print("[red]Timeout fetching channel videos[/red]")
+        raise SystemExit(1)
+    except OSError as e:
+        console.print(f"[red]yt-dlp not found: {e}[/red]")
+        raise SystemExit(1)
+
+    if result.returncode != 0 and not result.stdout.strip():
+        console.print(f"[red]Failed to fetch channel: {result.stderr}[/red]")
+        raise SystemExit(1)
+
+    # Parse videos
+    videos = []
+    for line in result.stdout.strip().split("\n"):
+        if not line:
+            continue
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        duration = data.get("duration") or 0
+        duration_minutes = duration / 60
+
+        # Apply filters
+        if duration_minutes < min_duration or duration_minutes > max_duration:
+            continue
+
+        # Parse upload date
+        upload_date = data.get("upload_date", "")
+        published = None
+        if upload_date and len(upload_date) == 8:
+            published = datetime.strptime(upload_date, "%Y%m%d")
+            if after_date and published < after_date:
+                continue
+            if before_date and published > before_date:
+                continue
+
+        vid_id = data.get("id", "")
+        videos.append({
+            "id": vid_id,
+            "title": data.get("title", ""),
+            "duration": duration,
+            "published": published.isoformat() if published else None,
+            "url": data.get("webpage_url", f"https://www.youtube.com/watch?v={vid_id}"),
+        })
+
+        if len(videos) >= max_videos:
+            break
+
+    if not videos:
+        if as_json:
+            click.echo(json.dumps({"fetched": 0, "videos": []}))
+        else:
+            console.print("[yellow]No videos found matching criteria[/yellow]")
+        return
+
+    if not as_json:
+        console.print(f"Found {len(videos)} videos, downloading transcripts...")
+
+    # Download transcripts
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    results = []
+    failed = []
+
+    # Load identity if provided
+    identity = None
+    if identity_slug:
+        try:
+            identity = load_identity(identity_slug)
+        except FileNotFoundError:
+            console.print(f"[red]Identity not found: {identity_slug}[/red]")
+            raise SystemExit(1)
+
+    if as_json:
+        for video in videos:
+            transcript_path = download_transcript(video["url"], output_path, lang)
+            if transcript_path:
+                results.append({"id": video["id"], "title": video["title"], "path": str(transcript_path)})
+                if identity:
+                    add_video_to_identity(identity_slug, video["id"], confirmed=True)
+            else:
+                failed.append(video["id"])
+    else:
+        with Progress(console=console) as progress:
+            task = progress.add_task("Downloading...", total=len(videos))
+            for video in videos:
+                progress.update(task, description=f"[dim]{video['id']}[/dim]")
+                transcript_path = download_transcript(video["url"], output_path, lang)
+                if transcript_path:
+                    results.append({"id": video["id"], "title": video["title"], "path": str(transcript_path)})
+                    if identity:
+                        add_video_to_identity(identity_slug, video["id"], confirmed=True)
+                else:
+                    failed.append(video["id"])
+                progress.advance(task)
+
+    # Output
+    if as_json:
+        click.echo(json.dumps({
+            "fetched": len(results),
+            "failed": len(failed),
+            "transcripts": results,
+            "output_dir": str(output_path),
+        }, indent=2))
+    else:
+        console.print(f"\n[green]Fetched: {len(results)} transcripts[/green]")
+        if failed:
+            console.print(f"[red]Failed: {len(failed)} (no captions)[/red]")
+        if identity:
+            console.print(f"[green]Added {len(results)} videos to {identity.display_name}[/green]")
+        console.print(f"\nSaved to: {output_path}/")
+
+
+@main.command("from-rss")
+@click.argument("feed_url")
+@click.option("--output-dir", "-o", type=click.Path(), default="./transcripts", help="Output directory")
+@click.option("--max-episodes", "-n", default=20, help="Maximum episodes to fetch")
+@click.option("--after", help="Only episodes after date (YYYY-MM-DD)")
+@click.option("--identity", "-i", "identity_slug", help="Add to identity's confirmed videos")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def from_rss(
+    feed_url: str,
+    output_dir: str,
+    max_episodes: int,
+    after: str | None,
+    identity_slug: str | None,
+    as_json: bool,
+) -> None:
+    """Ingest podcast episodes from an RSS feed.
+    
+    Downloads audio and transcribes using Whisper (requires whisper to be installed).
+    Currently supports YouTube RSS feeds directly; for audio podcasts, transcription
+    is not yet implemented.
+    """
+    import subprocess
+    import xml.etree.ElementTree as ET
+    from datetime import datetime
+    from pathlib import Path
+    from urllib.request import urlopen
+
+    from rich.console import Console
+
+    console = Console(stderr=True)
+
+    # Parse date filter
+    after_date = datetime.strptime(after, "%Y-%m-%d") if after else None
+
+    if not as_json:
+        console.print(f"Fetching RSS feed: {feed_url}")
+
+    try:
+        with urlopen(feed_url, timeout=30) as response:
+            feed_content = response.read()
+    except Exception as e:
+        console.print(f"[red]Failed to fetch RSS feed: {e}[/red]")
+        raise SystemExit(1)
+
+    try:
+        root = ET.fromstring(feed_content)
+    except ET.ParseError as e:
+        console.print(f"[red]Failed to parse RSS feed: {e}[/red]")
+        raise SystemExit(1)
+
+    # Find items/entries
+    episodes = []
+    
+    # Try Atom format first
+    ns = {"atom": "http://www.w3.org/2005/Atom"}
+    entries = root.findall(".//atom:entry", ns)
+    
+    if entries:
+        # Atom format (YouTube RSS)
+        for entry in entries[:max_episodes * 2]:
+            title_el = entry.find("atom:title", ns)
+            link_el = entry.find("atom:link", ns)
+            published_el = entry.find("atom:published", ns)
+            
+            title = title_el.text if title_el is not None else ""
+            link = link_el.get("href", "") if link_el is not None else ""
+            
+            pub_date = None
+            if published_el is not None and published_el.text:
+                try:
+                    pub_date = datetime.fromisoformat(published_el.text.replace("Z", "+00:00"))
+                except ValueError:
+                    pass
+            
+            if after_date and pub_date and pub_date.replace(tzinfo=None) < after_date:
+                continue
+                
+            if link:
+                episodes.append({"title": title, "url": link, "published": pub_date})
+    else:
+        # RSS 2.0 format
+        items = root.findall(".//item")
+        for item in items[:max_episodes * 2]:
+            title_el = item.find("title")
+            link_el = item.find("link")
+            
+            title = title_el.text if title_el is not None else ""
+            link = link_el.text if link_el is not None else ""
+            
+            if link:
+                episodes.append({"title": title, "url": link, "published": None})
+
+    episodes = episodes[:max_episodes]
+
+    if not episodes:
+        if as_json:
+            click.echo(json.dumps({"fetched": 0, "episodes": []}))
+        else:
+            console.print("[yellow]No episodes found in feed[/yellow]")
+        return
+
+    if not as_json:
+        console.print(f"Found {len(episodes)} episodes")
+
+    # For YouTube RSS feeds, we can use the existing transcript download
+    from wve.identity import add_video_to_identity, extract_video_id, load_identity
+    from wve.transcripts import download_transcript
+
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    identity = None
+    if identity_slug:
+        try:
+            identity = load_identity(identity_slug)
+        except FileNotFoundError:
+            console.print(f"[red]Identity not found: {identity_slug}[/red]")
+            raise SystemExit(1)
+
+    results = []
+    failed = []
+
+    for ep in episodes:
+        url = ep["url"]
+        vid_id = extract_video_id(url)
+        
+        transcript_path = download_transcript(url, output_path, "en")
+        if transcript_path:
+            results.append({"id": vid_id, "title": ep["title"], "path": str(transcript_path)})
+            if identity:
+                add_video_to_identity(identity_slug, vid_id, confirmed=True)
+        else:
+            failed.append(vid_id)
+
+    if as_json:
+        click.echo(json.dumps({
+            "fetched": len(results),
+            "failed": len(failed),
+            "transcripts": results,
+        }, indent=2))
+    else:
+        console.print(f"\n[green]Fetched: {len(results)} transcripts[/green]")
+        if failed:
+            console.print(f"[red]Failed: {len(failed)} (no captions/not YouTube)[/red]")
+        console.print(f"Saved to: {output_path}/")
+
+
+@main.command("from-urls")
+@click.argument("input", type=click.Path(exists=True), required=False)
+@click.option("--url", "-u", multiple=True, help="Video URL (can specify multiple)")
+@click.option("--output-dir", "-o", type=click.Path(), default="./transcripts", help="Output directory")
+@click.option("--lang", default="en", help="Preferred transcript language")
+@click.option("--identity", "-i", "identity_slug", help="Add to identity's confirmed videos")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def from_urls(
+    input: str | None,
+    url: tuple[str, ...],
+    output_dir: str,
+    lang: str,
+    identity_slug: str | None,
+    yes: bool,
+    as_json: bool,
+) -> None:
+    """Process manually curated video URLs.
+    
+    INPUT is a file with one URL per line.
+    Alternatively, use --url flags for individual URLs.
+    
+    This is the most accurate method - user guarantees correctness.
+    """
+    from pathlib import Path
+
+    from rich.console import Console
+    from rich.progress import Progress
+
+    from wve.identity import add_video_to_identity, extract_video_id, load_identity
+    from wve.transcripts import download_transcript
+
+    console = Console(stderr=True)
+
+    # Collect URLs
+    urls = list(url)
+    if input:
+        with open(input) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    urls.append(line)
+
+    if not urls:
+        console.print("[red]No URLs provided. Use INPUT file or --url flags.[/red]")
+        raise SystemExit(1)
+
+    if not as_json:
+        console.print(f"Processing {len(urls)} URLs")
+
+    if not yes and not as_json:
+        from rich.prompt import Confirm
+        if not Confirm.ask(f"Download transcripts for {len(urls)} videos?"):
+            console.print("Cancelled.")
+            return
+
+    # Load identity if provided
+    identity = None
+    if identity_slug:
+        try:
+            identity = load_identity(identity_slug)
+        except FileNotFoundError:
+            console.print(f"[red]Identity not found: {identity_slug}[/red]")
+            raise SystemExit(1)
+
+    # Download transcripts
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    results = []
+    failed = []
+
+    if as_json:
+        for video_url in urls:
+            vid_id = extract_video_id(video_url)
+            transcript_path = download_transcript(video_url, output_path, lang)
+            if transcript_path:
+                results.append({"id": vid_id, "url": video_url, "path": str(transcript_path)})
+                if identity:
+                    add_video_to_identity(identity_slug, vid_id, confirmed=True)
+            else:
+                failed.append(vid_id)
+    else:
+        with Progress(console=console) as progress:
+            task = progress.add_task("Downloading...", total=len(urls))
+            for video_url in urls:
+                vid_id = extract_video_id(video_url)
+                progress.update(task, description=f"[dim]{vid_id}[/dim]")
+                transcript_path = download_transcript(video_url, output_path, lang)
+                if transcript_path:
+                    results.append({"id": vid_id, "url": video_url, "path": str(transcript_path)})
+                    if identity:
+                        add_video_to_identity(identity_slug, vid_id, confirmed=True)
+                else:
+                    failed.append(vid_id)
+                progress.advance(task)
+
+    # Output
+    if as_json:
+        click.echo(json.dumps({
+            "fetched": len(results),
+            "failed": len(failed),
+            "transcripts": results,
+            "output_dir": str(output_path),
+        }, indent=2))
+    else:
+        console.print(f"\n[green]Fetched: {len(results)} transcripts[/green]")
+        if failed:
+            console.print(f"[red]Failed: {len(failed)} (no captions)[/red]")
+        if identity:
+            console.print(f"[green]Added {len(results)} videos to {identity.display_name}[/green]")
+        console.print(f"\nSaved to: {output_path}/")
+
+
+# === Analysis Commands (v0.2) ===
+
+
+@main.command()
+@click.argument("input", type=click.Path(exists=True))
+@click.option("--max-quotes", "-n", default=50, help="Maximum quotes to extract")
+@click.option("--min-score", default=0.3, help="Minimum score threshold (0-1)")
+@click.option("--contrarian", is_flag=True, help="Prioritize contrarian statements")
+@click.option("--output", "-o", type=click.Path(), help="Output JSON file")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def quotes(
+    input: str,
+    max_quotes: int,
+    min_score: float,
+    contrarian: bool,
+    output: str | None,
+    as_json: bool,
+) -> None:
+    """Extract notable quotes from transcripts.
+    
+    INPUT is a directory containing transcript .txt files.
+    """
+    from pathlib import Path
+
+    from rich.console import Console
+    from rich.table import Table
+
+    from wve.quotes import extract_quotes_from_dir
+
+    console = Console(stderr=True)
+    input_path = Path(input)
+
+    if not input_path.is_dir():
+        console.print("[red]INPUT must be a directory of transcript files[/red]")
+        raise SystemExit(1)
+
+    if not as_json:
+        console.print(f"Extracting quotes from: {input}")
+
+    collection = extract_quotes_from_dir(
+        input_path,
+        max_quotes=max_quotes,
+        min_score=min_score,
+    )
+
+    # Filter contrarian if requested
+    if contrarian:
+        collection.quotes = [q for q in collection.quotes if q.is_contrarian]
+        collection.quotes = collection.quotes[:max_quotes]
+
+    if as_json:
+        click.echo(collection.model_dump_json(indent=2))
+    else:
+        console.print(f"\nFound {len(collection.quotes)} notable quotes from {collection.source_count} sources\n")
+
+        for i, q in enumerate(collection.quotes[:20], 1):
+            console.print(f"[bold][{i}][/bold] [dim]({q.source_id})[/dim]")
+            console.print(f"  \"{q.text}\"")
+            if q.is_contrarian:
+                console.print("  [yellow]^ contrarian[/yellow]")
+            console.print()
+
+        if len(collection.quotes) > 20:
+            console.print(f"[dim]... and {len(collection.quotes) - 20} more quotes[/dim]")
+
+    if output:
+        with open(output, "w") as f:
+            f.write(collection.model_dump_json(indent=2))
+        if not as_json:
+            console.print(f"\nSaved to: {output}")
+
+
+@main.command()
+@click.argument("input", type=click.Path(exists=True))
+@click.option("--subject", "-s", help="Subject name for context")
+@click.option("--max-themes", "-n", default=10, help="Maximum themes to extract")
+@click.option("--output", "-o", type=click.Path(), help="Output JSON file")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def themes(
+    input: str,
+    subject: str | None,
+    max_themes: int,
+    output: str | None,
+    as_json: bool,
+) -> None:
+    """Extract themes with supporting quotes from transcripts.
+    
+    INPUT is a directory containing transcript .txt files.
+    Unlike simple keyword extraction, this grounds each theme in actual quotes.
+    """
+    from pathlib import Path
+
+    from rich.console import Console
+
+    from wve.quotes import extract_quotes_from_dir
+
+    console = Console(stderr=True)
+    input_path = Path(input)
+
+    if not input_path.is_dir():
+        console.print("[red]INPUT must be a directory of transcript files[/red]")
+        raise SystemExit(1)
+
+    if not as_json:
+        console.print(f"Extracting themes from: {input}")
+
+    # First extract quotes
+    collection = extract_quotes_from_dir(input_path, max_quotes=100, min_score=0.2)
+
+    # Simple theme grouping by common words/phrases
+    # This is a basic implementation - could be enhanced with clustering
+    from collections import Counter
+
+    word_counts: Counter[str] = Counter()
+    for quote in collection.quotes:
+        words = quote.text.lower().split()
+        # Skip common words
+        stopwords = {"the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+                     "have", "has", "had", "do", "does", "did", "will", "would", "could",
+                     "should", "may", "might", "must", "shall", "can", "to", "of", "in",
+                     "for", "on", "with", "at", "by", "from", "as", "or", "and", "but",
+                     "if", "then", "so", "than", "that", "this", "these", "those", "it",
+                     "its", "you", "your", "i", "my", "me", "we", "our", "they", "their"}
+        meaningful = [w for w in words if len(w) > 3 and w not in stopwords]
+        word_counts.update(meaningful)
+
+    # Build themes from top words
+    themes_data = []
+    used_quotes = set()
+
+    for word, count in word_counts.most_common(max_themes * 2):
+        if len(themes_data) >= max_themes:
+            break
+
+        # Find quotes containing this word
+        supporting = []
+        for q in collection.quotes:
+            if q.text in used_quotes:
+                continue
+            if word in q.text.lower():
+                supporting.append(q)
+                used_quotes.add(q.text)
+                if len(supporting) >= 3:
+                    break
+
+        if supporting:
+            themes_data.append({
+                "name": word.title(),
+                "frequency": count,
+                "supporting_quotes": [{"text": q.text, "source": q.source_id} for q in supporting],
+            })
+
+    result = {
+        "subject": subject,
+        "themes": themes_data,
+        "source_count": collection.source_count,
+    }
+
+    if as_json:
+        click.echo(json.dumps(result, indent=2, default=str))
+    else:
+        console.print(f"\nFound {len(themes_data)} themes from {collection.source_count} sources\n")
+
+        for theme in themes_data:
+            console.print(f"[bold]{theme['name']}[/bold] (mentioned {theme['frequency']}x)")
+            for sq in theme["supporting_quotes"][:2]:
+                console.print(f"  [dim]\"{sq['text'][:80]}...\"[/dim]")
+            console.print()
+
+    if output:
+        with open(output, "w") as f:
+            json.dump(result, f, indent=2, default=str)
+        if not as_json:
+            console.print(f"Saved to: {output}")
+
+
+@main.command()
+@click.argument("input", type=click.Path(exists=True))
+@click.option("--subject", "-s", required=True, help="Subject name")
+@click.option("--output", "-o", type=click.Path(), help="Output JSON file")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def contrast(
+    input: str,
+    subject: str,
+    output: str | None,
+    as_json: bool,
+) -> None:
+    """Find contrarian or distinctive beliefs from transcripts.
+    
+    INPUT is a directory containing transcript .txt files.
+    Extracts quotes that suggest non-mainstream or counterintuitive views.
+    """
+    from pathlib import Path
+
+    from rich.console import Console
+
+    from wve.quotes import extract_quotes_from_dir
+
+    console = Console(stderr=True)
+    input_path = Path(input)
+
+    if not input_path.is_dir():
+        console.print("[red]INPUT must be a directory of transcript files[/red]")
+        raise SystemExit(1)
+
+    if not as_json:
+        console.print(f"Finding contrarian views for: {subject}")
+
+    # Extract quotes with lower threshold to catch more contrarian statements
+    collection = extract_quotes_from_dir(input_path, max_quotes=200, min_score=0.2)
+
+    # Filter to contrarian quotes
+    contrarian_quotes = [q for q in collection.quotes if q.is_contrarian]
+
+    result = {
+        "subject": subject,
+        "contrarian_count": len(contrarian_quotes),
+        "quotes": [q.model_dump() for q in contrarian_quotes[:30]],
+        "source_count": collection.source_count,
+    }
+
+    if as_json:
+        click.echo(json.dumps(result, indent=2, default=str))
+    else:
+        console.print(f"\nFound {len(contrarian_quotes)} contrarian statements\n")
+
+        for i, q in enumerate(contrarian_quotes[:15], 1):
+            console.print(f"[bold][{i}][/bold] [dim]({q.source_id})[/dim]")
+            console.print(f"  \"{q.text}\"")
+            console.print()
+
+        if len(contrarian_quotes) > 15:
+            console.print(f"[dim]... and {len(contrarian_quotes) - 15} more[/dim]")
+
+    if output:
+        with open(output, "w") as f:
+            json.dump(result, f, indent=2, default=str)
+        if not as_json:
+            console.print(f"\nSaved to: {output}")
+
+
+@main.command()
+@click.argument("identity_slug")
+@click.option("--output", "-o", type=click.Path(), help="Save new candidates to JSON")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def refine(
+    identity_slug: str,
+    output: str | None,
+    as_json: bool,
+) -> None:
+    """Interactive search refinement to find more content for an identity.
+    
+    Suggests additional searches based on confirmed videos and channel patterns.
+    """
+    from rich.console import Console
+    from rich.prompt import Prompt
+
+    from wve.classify import CandidateSet, VideoCandidate, classify_candidates
+    from wve.identity import load_identity
+    from wve.search import search_videos
+
+    console = Console(stderr=True)
+
+    try:
+        identity = load_identity(identity_slug)
+    except FileNotFoundError:
+        console.print(f"[red]Identity not found: {identity_slug}[/red]")
+        raise SystemExit(1)
+
+    # Generate search suggestions based on identity
+    suggestions = [
+        f'"{identity.display_name}" interview',
+        f'"{identity.display_name}" podcast',
+        f'"{identity.display_name}" talk',
+    ]
+    
+    for alias in identity.aliases[:2]:
+        suggestions.append(f'"{alias}" interview')
+
+    # Stats
+    confirmed_count = len(identity.confirmed_videos)
+    channel_count = len(identity.channels)
+
+    if as_json:
+        result = {
+            "identity": identity_slug,
+            "display_name": identity.display_name,
+            "confirmed_videos": confirmed_count,
+            "channels": channel_count,
+            "suggested_searches": suggestions,
+        }
+        click.echo(json.dumps(result, indent=2))
+        return
+
+    console.print(f"\n[bold]Refining: {identity.display_name}[/bold]")
+    console.print(f"Current corpus: {confirmed_count} confirmed videos, {channel_count} channel(s)\n")
+
+    console.print("[bold]Suggested searches:[/bold]")
+    for i, s in enumerate(suggestions, 1):
+        console.print(f"  [{i}] {s}")
+    console.print()
+
+    choice = Prompt.ask(
+        "Enter number to search, custom query, or 'q' to quit",
+        default="q"
+    )
+
+    if choice.lower() == "q":
+        console.print("Done.")
+        return
+
+    # Determine search query
+    if choice.isdigit() and 1 <= int(choice) <= len(suggestions):
+        query = suggestions[int(choice) - 1]
+    else:
+        query = choice
+
+    console.print(f"\nSearching: {query}")
+    results = search_videos(query, max_results=20)
+
+    # Convert and classify
+    candidates = [
+        VideoCandidate(
+            id=v.id,
+            title=v.title,
+            channel=v.channel,
+            channel_id=v.channel_id,
+            duration_seconds=v.duration_seconds,
+            url=v.url,
+            published=v.published,
+        )
+        for v in results.videos
+    ]
+
+    # Filter out already confirmed/rejected
+    new_candidates = [
+        c for c in candidates
+        if c.id not in identity.confirmed_videos and c.id not in identity.rejected_videos
+    ]
+
+    classify_candidates(new_candidates, identity.display_name, identity)
+
+    console.print(f"\nFound {len(new_candidates)} new candidates")
+
+    # Group by classification
+    likely = [c for c in new_candidates if c.classification == "likely"]
+    uncertain = [c for c in new_candidates if c.classification == "uncertain"]
+
+    if likely:
+        console.print(f"\n[green]Likely matches: {len(likely)}[/green]")
+        for c in likely[:5]:
+            console.print(f"  - {c.title[:60]}")
+
+    if uncertain:
+        console.print(f"\n[yellow]Uncertain: {len(uncertain)}[/yellow]")
+
+    if output and new_candidates:
+        candidate_set = CandidateSet(
+            query=query,
+            identity_slug=identity_slug,
+            candidates=new_candidates,
+        )
+        with open(output, "w") as f:
+            f.write(candidate_set.model_dump_json(indent=2))
+        console.print(f"\nSaved to: {output}")
+
+
+@main.command()
+@click.argument("input", type=click.Path(exists=True))
+@click.option("--subject", "-s", required=True, help="Subject name")
+@click.option("--output", "-o", type=click.Path(), help="Output markdown file")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON instead of markdown")
+def report(
+    input: str,
+    subject: str,
+    output: str | None,
+    as_json: bool,
+) -> None:
+    """Generate comprehensive worldview report from transcripts.
+    
+    INPUT is a directory containing transcript .txt files.
+    Produces a markdown report with themes, quotes, and contrarian beliefs.
+    """
+    from datetime import datetime
+    from pathlib import Path
+
+    from rich.console import Console
+
+    from wve.quotes import extract_quotes_from_dir
+
+    console = Console(stderr=True)
+    input_path = Path(input)
+
+    if not input_path.is_dir():
+        console.print("[red]INPUT must be a directory of transcript files[/red]")
+        raise SystemExit(1)
+
+    if not as_json:
+        console.print(f"Generating report for: {subject}")
+
+    # Extract quotes
+    collection = extract_quotes_from_dir(input_path, max_quotes=100, min_score=0.2)
+
+    # Separate contrarian quotes
+    contrarian = [q for q in collection.quotes if q.is_contrarian]
+    top_quotes = collection.quotes[:20]
+
+    # Extract themes (simple word frequency)
+    from collections import Counter
+    word_counts: Counter[str] = Counter()
+    stopwords = {"the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+                 "have", "has", "had", "do", "does", "did", "will", "would", "could",
+                 "should", "may", "might", "must", "shall", "can", "to", "of", "in",
+                 "for", "on", "with", "at", "by", "from", "as", "or", "and", "but",
+                 "if", "then", "so", "than", "that", "this", "these", "those", "it",
+                 "its", "you", "your", "i", "my", "me", "we", "our", "they", "their"}
+    
+    for quote in collection.quotes:
+        words = quote.text.lower().split()
+        meaningful = [w for w in words if len(w) > 3 and w not in stopwords]
+        word_counts.update(meaningful)
+
+    top_themes = word_counts.most_common(10)
+
+    if as_json:
+        result = {
+            "subject": subject,
+            "generated_at": datetime.now().isoformat(),
+            "source_count": collection.source_count,
+            "total_quotes": len(collection.quotes),
+            "themes": [{"name": w, "count": c} for w, c in top_themes],
+            "top_quotes": [q.model_dump() for q in top_quotes],
+            "contrarian_quotes": [q.model_dump() for q in contrarian[:15]],
+        }
+        click.echo(json.dumps(result, indent=2, default=str))
+    else:
+        # Generate markdown report
+        lines = [
+            f"# Worldview Report: {subject}",
+            "",
+            f"*Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}*",
+            "",
+            "---",
+            "",
+            "## Overview",
+            "",
+            f"- **Sources analyzed:** {collection.source_count} transcripts",
+            f"- **Notable quotes extracted:** {len(collection.quotes)}",
+            f"- **Contrarian statements:** {len(contrarian)}",
+            "",
+            "---",
+            "",
+            "## Key Themes",
+            "",
+        ]
+
+        for word, count in top_themes:
+            lines.append(f"- **{word.title()}** (mentioned {count}x)")
+        
+        lines.extend([
+            "",
+            "---",
+            "",
+            "## Notable Quotes",
+            "",
+        ])
+
+        for i, q in enumerate(top_quotes[:15], 1):
+            lines.append(f"{i}. \"{q.text}\"")
+            lines.append(f"   *— {q.source_id}*")
+            lines.append("")
+
+        if contrarian:
+            lines.extend([
+                "---",
+                "",
+                "## Contrarian / Distinctive Views",
+                "",
+                "These statements suggest views that differ from mainstream thinking:",
+                "",
+            ])
+
+            for i, q in enumerate(contrarian[:10], 1):
+                lines.append(f"{i}. \"{q.text}\"")
+                lines.append(f"   *— {q.source_id}*")
+                lines.append("")
+
+        lines.extend([
+            "---",
+            "",
+            "*Report generated by wve (Worldview Extractor) v0.2*",
+        ])
+
+        report_text = "\n".join(lines)
+
+        if output:
+            Path(output).write_text(report_text)
+            console.print(f"Report saved to: {output}")
+        else:
+            click.echo(report_text)
+
+
+# === Legacy v0.1 Commands ===
+
+
 @main.command()
 @click.argument("person")
 @click.option("--max-results", "-n", default=10, help="Maximum videos to find")
@@ -25,6 +1596,8 @@ def main(ctx: click.Context, debug: bool) -> None:
 @click.option("--min-duration", default=5, help="Minimum video length in minutes")
 @click.option("--max-duration", default=180, help="Maximum video length in minutes")
 @click.option("--output", "-o", type=click.Path(), help="Save results to JSON file")
+@click.option("--strict", is_flag=True, help="Only include videos with query in title")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON (for automation)")
 def search(
     person: str,
     max_results: int,
@@ -32,11 +1605,14 @@ def search(
     min_duration: int,
     max_duration: int,
     output: str | None,
+    strict: bool,
+    as_json: bool,
 ) -> None:
     """Discover videos featuring PERSON."""
     from wve.search import save_search_results, search_videos
 
-    click.echo(f"Searching for videos featuring: {person}")
+    if not as_json:
+        click.echo(f"Searching for videos featuring: {person}", err=True)
     results = search_videos(
         person,
         max_results=max_results,
@@ -44,12 +1620,18 @@ def search(
         max_duration=max_duration,
         channel=channel,
     )
-    click.echo(f"Found {len(results.videos)} videos")
 
-    if output:
+    if strict:
+        query_lower = person.lower()
+        results.videos = [v for v in results.videos if query_lower in v.title.lower()]
+
+    if as_json:
+        click.echo(results.model_dump_json(indent=2))
+    elif output:
         save_search_results(results, output)
-        click.echo(f"Saved to {output}")
+        click.echo(f"Found {len(results.videos)} videos, saved to {output}", err=True)
     else:
+        click.echo(f"Found {len(results.videos)} videos", err=True)
         for v in results.videos:
             click.echo(f"  [{v.id}] {v.title} ({v.duration_seconds // 60}m)")
 
@@ -165,14 +1747,14 @@ def cluster(input: str, model: str, n_clusters: int, output: str | None) -> None
 @click.option("--model", default="llama3", help="Ollama model for deep synthesis")
 @click.option("--output", "-o", type=click.Path(), help="Output file")
 @click.option("--subject", "-s", default="", help="Subject name")
-def synthesize(input: str, depth: str, points: int, model: str, output: str | None, subject: str) -> None:
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON (for automation)")
+def synthesize(input: str, depth: str, points: int, model: str, output: str | None, subject: str, as_json: bool) -> None:
     """Synthesize worldview points from extracted/clustered data."""
     from wve.cluster import load_clusters
     from wve.models import Extraction
     from wve.synthesize import save_worldview
     from wve.synthesize import synthesize as do_synthesize
 
-    # Try loading as clusters first, then as extraction
     input_path = Path(input)
     with open(input_path) as f:
         data = json.load(f)
@@ -186,16 +1768,20 @@ def synthesize(input: str, depth: str, points: int, model: str, output: str | No
 
         clusters = cluster_extraction(extraction)
 
-    click.echo(f"Synthesizing at depth: {depth}")
+    if not as_json:
+        click.echo(f"Synthesizing at depth: {depth}", err=True)
     worldview = do_synthesize(clusters, extraction, subject=subject, depth=depth, n_points=points, model=model)
 
-    click.echo(f"\nWorldview for {worldview.subject or 'Unknown'}:")
-    for i, p in enumerate(worldview.points, 1):
-        click.echo(f"  {i}. {p.point} (confidence: {p.confidence:.0%})")
+    if as_json:
+        click.echo(worldview.model_dump_json(indent=2))
+    else:
+        click.echo(f"\nWorldview for {worldview.subject or 'Unknown'}:")
+        for i, p in enumerate(worldview.points, 1):
+            click.echo(f"  {i}. {p.point} (confidence: {p.confidence:.0%})")
 
-    if output:
-        save_worldview(worldview, output)
-        click.echo(f"\nSaved to {output}")
+        if output:
+            save_worldview(worldview, output)
+            click.echo(f"\nSaved to {output}")
 
 
 @main.command()
@@ -299,6 +1885,88 @@ def inspect(artifact: str) -> None:
 
     else:
         click.echo(json.dumps(data, indent=2)[:2000])
+
+
+@main.command()
+@click.argument("input", type=click.Path(exists=True))
+@click.option("--output", "-o", type=click.Path(), help="Output file (default: stdout)")
+@click.option("--format", "fmt", type=click.Choice(["plain", "markdown"]), default="markdown", help="Output format")
+@click.option("--max-tokens", default=0, help="Warn if estimated tokens exceed this (0=no limit)")
+def dump(input: str, output: str | None, fmt: str, max_tokens: int) -> None:
+    """Concatenate transcripts for direct LLM use."""
+    from wve.rag import load_transcripts_for_rag
+
+    input_path = Path(input)
+    transcripts, titles = load_transcripts_for_rag(input_path)
+
+    if not transcripts:
+        click.echo("No transcripts found.", err=True)
+        return
+
+    parts = []
+    for vid, text in transcripts.items():
+        title = titles.get(vid, vid)
+        if fmt == "markdown":
+            parts.append(f"## {title}\n\n{text}")
+        else:
+            parts.append(f"=== {title} ===\n\n{text}")
+
+    separator = "\n\n---\n\n" if fmt == "markdown" else "\n\n"
+    result = separator.join(parts)
+
+    estimated_tokens = len(result) // 4
+    click.echo(f"Transcripts: {len(transcripts)}, ~{estimated_tokens:,} tokens", err=True)
+
+    if max_tokens > 0 and estimated_tokens > max_tokens:
+        click.echo(f"WARNING: Exceeds --max-tokens {max_tokens:,}", err=True)
+
+    if output:
+        Path(output).write_text(result)
+        click.echo(f"Saved to {output}", err=True)
+    else:
+        click.echo(result)
+
+
+@main.command()
+@click.argument("input", type=click.Path(exists=True))
+@click.argument("question")
+@click.option("--top-k", "-k", default=5, help="Number of chunks to retrieve")
+@click.option("--model", default="mistral", help="Ollama model for answering")
+@click.option("--show-sources", is_flag=True, help="Show source chunks")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON (for automation)")
+def ask(input: str, question: str, top_k: int, model: str, show_sources: bool, as_json: bool) -> None:
+    """Ask a question about the transcript corpus."""
+    from wve.rag import ask_corpus, build_index, chunk_transcripts, load_transcripts_for_rag, search_index
+
+    input_path = Path(input)
+    transcripts, titles = load_transcripts_for_rag(input_path)
+
+    if not transcripts:
+        click.echo("No transcripts found.", err=True)
+        return
+
+    if not as_json:
+        click.echo(f"Building index from {len(transcripts)} transcripts...", err=True)
+    chunks = chunk_transcripts(transcripts, titles)
+    index = build_index(chunks)
+
+    if show_sources and not as_json:
+        results = search_index(index, question, top_k)
+        click.echo("\n--- Relevant excerpts ---\n")
+        for r in results:
+            click.echo(f"[{r.chunk.source_title}] (score: {r.score:.3f})")
+            click.echo(r.chunk.text[:500] + "..." if len(r.chunk.text) > 500 else r.chunk.text)
+            click.echo()
+
+    if not as_json:
+        click.echo("Generating answer...", err=True)
+    result = ask_corpus(index, question, top_k=top_k, model=model)
+
+    if as_json:
+        click.echo(json.dumps(result, indent=2))
+    else:
+        click.echo(f"\n{result['answer']}")
+        click.echo(f"\n[Sources: {', '.join(result['sources'])}]", err=True)
 
 
 if __name__ == "__main__":
