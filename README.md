@@ -1,18 +1,18 @@
-# Worldview Extractor
+# Weave
 
-Synthesize a person's intellectual worldview from their public video appearances.
+Comprehensive synthesis tool for distilling intellectual worldviews from arbitrary text sources—videos, articles, podcasts, tweets, books, and more. Weave takes disparate textual inputs and synthesizes them into coherent, hierarchical belief systems with named concepts, contrarian analysis, and visual outputs.
 
 ## Installation
 
 ```bash
-pip install worldview-extractor
+pip install weave
 ```
 
 Or from source:
 
 ```bash
-git clone https://github.com/bierlingm/worldview-extractor
-cd worldview-extractor
+git clone https://github.com/bierlingm/weave
+cd weave
 pip install -e .
 ```
 

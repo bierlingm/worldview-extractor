@@ -1,4 +1,4 @@
-"""CLI entrypoint for wve (Worldview Extractor)."""
+"""CLI entrypoint for Weave - Comprehensive worldview synthesis tool."""
 
 import json
 from pathlib import Path
@@ -13,7 +13,7 @@ from wve import __version__
 @click.option("--debug/--no-debug", default=False, help="Enable debug logging")
 @click.pass_context
 def main(ctx: click.Context, debug: bool) -> None:
-    """Worldview Extractor - Synthesize intellectual worldviews from video appearances."""
+    """Weave - Synthesize intellectual worldviews from arbitrary text sources."""
     ctx.ensure_object(dict)
     ctx.obj["debug"] = debug
 
@@ -1747,8 +1747,9 @@ def cluster(input: str, model: str, n_clusters: int, output: str | None) -> None
 @click.option("--model", default="llama3", help="Ollama model for deep synthesis")
 @click.option("--output", "-o", type=click.Path(), help="Output file")
 @click.option("--subject", "-s", default="", help="Subject name")
+@click.option("--extraction", "-e", "extraction_path", type=click.Path(exists=True), help="Extraction JSON (required for medium/deep if INPUT is clusters)")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON (for automation)")
-def synthesize(input: str, depth: str, points: int, model: str, output: str | None, subject: str, as_json: bool) -> None:
+def synthesize(input: str, depth: str, points: int, model: str, output: str | None, subject: str, extraction_path: str | None, as_json: bool) -> None:
     """Synthesize worldview points from extracted/clustered data."""
     from wve.cluster import load_clusters
     from wve.models import Extraction
@@ -1761,7 +1762,19 @@ def synthesize(input: str, depth: str, points: int, model: str, output: str | No
 
     if "clusters" in data:
         clusters = load_clusters(input)
+        # Load extraction from sibling file or explicit path
         extraction = None
+        if extraction_path:
+            with open(extraction_path) as ef:
+                extraction = Extraction.model_validate_json(ef.read())
+        elif depth in ("medium", "deep"):
+            # Try to find extraction.json in same directory
+            sibling = input_path.parent / "extraction.json"
+            if sibling.exists():
+                with open(sibling) as ef:
+                    extraction = Extraction.model_validate_json(ef.read())
+                if not as_json:
+                    click.echo(f"Auto-loaded extraction from {sibling}", err=True)
     else:
         extraction = Extraction.model_validate(data)
         from wve.cluster import cluster_extraction
@@ -1967,6 +1980,259 @@ def ask(input: str, question: str, top_k: int, model: str, show_sources: bool, a
     else:
         click.echo(f"\n{result['answer']}")
         click.echo(f"\n[Sources: {', '.join(result['sources'])}]", err=True)
+
+
+# === Store Commands ===
+
+
+@main.group()
+def store() -> None:
+    """Manage persistent worldview storage (beats-like)."""
+    pass
+
+
+@store.command("save")
+@click.argument("input", type=click.Path(exists=True))
+@click.option("--name", "-n", required=True, help="Display name for the subject")
+@click.option("--slug", "-s", help="Custom slug (default: derived from name)")
+@click.option("--channel", "-c", help="YouTube channel URL")
+@click.option("--tag", "-t", multiple=True, help="Tags for organization")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def store_save(
+    input: str,
+    name: str,
+    slug: str | None,
+    channel: str | None,
+    tag: tuple[str, ...],
+    as_json: bool,
+) -> None:
+    """Save a worldview extraction to persistent storage.
+    
+    INPUT is a directory containing transcript files (the output of from-channel/from-urls).
+    """
+    from pathlib import Path
+    import shutil
+    from rich.console import Console
+    from wve.identity import slugify
+    from wve.store import WorldviewEntry, get_entry_dir, save_entry
+    from wve.quotes import extract_quotes_from_dir
+
+    console = Console(stderr=True)
+    input_path = Path(input)
+    
+    if not input_path.is_dir():
+        console.print("[red]INPUT must be a directory of transcript files[/red]")
+        raise SystemExit(1)
+    
+    slug = slug or slugify(name)
+    
+    if not as_json:
+        console.print(f"Analyzing transcripts for: {name}")
+    
+    # Extract quotes and themes
+    collection = extract_quotes_from_dir(input_path, max_quotes=100, min_score=0.2)
+    
+    # Build themes from word frequency
+    from collections import Counter
+    word_counts: Counter[str] = Counter()
+    stopwords = {"the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+                 "have", "has", "had", "do", "does", "did", "will", "would", "could",
+                 "should", "may", "might", "must", "shall", "can", "to", "of", "in",
+                 "for", "on", "with", "at", "by", "from", "as", "or", "and", "but",
+                 "if", "then", "so", "than", "that", "this", "these", "those", "it",
+                 "its", "you", "your", "i", "my", "me", "we", "our", "they", "their"}
+    
+    for quote in collection.quotes:
+        words = quote.text.lower().split()
+        meaningful = [w for w in words if len(w) > 3 and w not in stopwords]
+        word_counts.update(meaningful)
+    
+    themes = [{"name": w.title(), "count": c} for w, c in word_counts.most_common(15)]
+    
+    # Separate contrarian quotes
+    contrarian = [q for q in collection.quotes if q.is_contrarian]
+    
+    # Create entry
+    entry = WorldviewEntry(
+        slug=slug,
+        display_name=name,
+        channel_url=channel,
+        source_count=collection.source_count,
+        quote_count=len(collection.quotes),
+        themes=themes,
+        top_quotes=[q.model_dump() for q in collection.quotes[:20]],
+        contrarian_quotes=[q.model_dump() for q in contrarian[:15]],
+        tags=list(tag),
+    )
+    
+    # Copy transcripts to store
+    entry_dir = get_entry_dir(slug)
+    transcripts_dest = entry_dir / "transcripts"
+    if transcripts_dest.exists():
+        shutil.rmtree(transcripts_dest)
+    shutil.copytree(input_path, transcripts_dest)
+    entry.transcripts_dir = str(transcripts_dest)
+    
+    # Generate and save report
+    from datetime import datetime
+    report_lines = [
+        f"# Worldview: {name}",
+        "",
+        f"*Stored: {datetime.now().strftime('%Y-%m-%d %H:%M')}*",
+        "",
+        f"- **Sources:** {collection.source_count}",
+        f"- **Quotes:** {len(collection.quotes)}",
+        f"- **Tags:** {', '.join(tag) if tag else 'none'}",
+        "",
+        "## Themes",
+        "",
+    ]
+    for t in themes[:10]:
+        report_lines.append(f"- **{t['name']}** ({t['count']}x)")
+    
+    report_lines.extend(["", "## Top Quotes", ""])
+    for i, q in enumerate(collection.quotes[:10], 1):
+        report_lines.append(f'{i}. "{q.text}"')
+        report_lines.append(f"   *— {q.source_id}*")
+        report_lines.append("")
+    
+    if contrarian:
+        report_lines.extend(["## Contrarian Views", ""])
+        for i, q in enumerate(contrarian[:5], 1):
+            report_lines.append(f'{i}. "{q.text}"')
+            report_lines.append("")
+    
+    report_path = entry_dir / "report.md"
+    report_path.write_text("\n".join(report_lines))
+    entry.report_path = str(report_path)
+    
+    # Save entry
+    save_entry(entry)
+    
+    if as_json:
+        click.echo(entry.model_dump_json(indent=2))
+    else:
+        console.print(f"\n[green]Saved: {slug}[/green]")
+        console.print(f"  Sources: {collection.source_count}")
+        console.print(f"  Quotes: {len(collection.quotes)}")
+        console.print(f"  Location: {entry_dir}")
+
+
+@store.command("list")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def store_list(as_json: bool) -> None:
+    """List all stored worldview extractions."""
+    from rich.console import Console
+    from rich.table import Table
+    from wve.store import list_entries
+
+    console = Console(stderr=True)
+    entries = list_entries()
+    
+    if as_json:
+        click.echo(json.dumps([e.model_dump() for e in entries], indent=2, default=str))
+    elif not entries:
+        console.print("No stored worldviews. Use 'wve store save' to add one.")
+    else:
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("Slug", width=25)
+        table.add_column("Name", width=30)
+        table.add_column("Sources", width=8)
+        table.add_column("Tags", width=20)
+        table.add_column("Updated", width=12)
+        
+        for e in entries:
+            tags = ", ".join(e.tags[:3]) if e.tags else ""
+            updated = e.updated_at.strftime("%Y-%m-%d") if e.updated_at else ""
+            table.add_row(e.slug, e.display_name, str(e.source_count), tags, updated)
+        
+        console.print(table)
+
+
+@store.command("show")
+@click.argument("slug")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def store_show(slug: str, as_json: bool) -> None:
+    """Show details for a stored worldview."""
+    from rich.console import Console
+    from wve.store import load_entry
+
+    console = Console(stderr=True)
+    
+    try:
+        entry = load_entry(slug)
+    except FileNotFoundError:
+        console.print(f"[red]Not found: {slug}[/red]")
+        raise SystemExit(1)
+    
+    if as_json:
+        click.echo(entry.model_dump_json(indent=2))
+    else:
+        console.print(f"\n[bold]{entry.display_name}[/bold] ({entry.slug})")
+        console.print(f"  Sources: {entry.source_count}")
+        console.print(f"  Quotes: {entry.quote_count}")
+        if entry.channel_url:
+            console.print(f"  Channel: {entry.channel_url}")
+        if entry.tags:
+            console.print(f"  Tags: {', '.join(entry.tags)}")
+        console.print(f"  Updated: {entry.updated_at.strftime('%Y-%m-%d %H:%M')}")
+        
+        if entry.themes:
+            console.print("\n[bold]Top Themes:[/bold]")
+            for t in entry.themes[:5]:
+                console.print(f"  - {t['name']} ({t['count']}x)")
+        
+        if entry.top_quotes:
+            console.print("\n[bold]Sample Quotes:[/bold]")
+            for q in entry.top_quotes[:3]:
+                console.print(f'  "{q["text"][:80]}..."')
+
+
+@store.command("search")
+@click.argument("query")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def store_search(query: str, as_json: bool) -> None:
+    """Search stored worldviews by name, slug, or tags."""
+    from rich.console import Console
+    from wve.store import search_entries
+
+    console = Console(stderr=True)
+    results = search_entries(query)
+    
+    if as_json:
+        click.echo(json.dumps([e.model_dump() for e in results], indent=2, default=str))
+    elif not results:
+        console.print(f"No matches for: {query}")
+    else:
+        console.print(f"Found {len(results)} match(es):\n")
+        for e in results:
+            console.print(f"  [bold]{e.slug}[/bold] - {e.display_name} ({e.source_count} sources)")
+
+
+@store.command("delete")
+@click.argument("slug")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+def store_delete(slug: str, yes: bool) -> None:
+    """Delete a stored worldview."""
+    from rich.console import Console
+    from rich.prompt import Confirm
+    from wve.store import delete_entry, load_entry
+
+    console = Console(stderr=True)
+    
+    try:
+        entry = load_entry(slug)
+    except FileNotFoundError:
+        console.print(f"[red]Not found: {slug}[/red]")
+        raise SystemExit(1)
+    
+    if not yes:
+        if not Confirm.ask(f"Delete '{entry.display_name}'?"):
+            console.print("Cancelled.")
+            return
+    
+    delete_entry(slug)
+    console.print(f"[green]Deleted: {slug}[/green]")
 
 
 if __name__ == "__main__":

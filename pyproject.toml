@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "worldview-extractor"
-version = "0.2.0"
-description = "Synthesize a person's intellectual worldview from their public video appearances"
+name = "weave"
+version = "0.3.0"
+description = "Weave - Comprehensive synthesis tool for distilling intellectual worldviews from arbitrary text sources (videos, articles, tweets, books, podcasts)"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
@@ -35,6 +35,9 @@ dependencies = [
     "numpy>=1.24",
     "rich>=13.0",
     "tomli>=2.0;python_version<'3.11'",
+    "textual>=0.47.0",
+    "jinja2>=3.1",
+    "markupsafe>=2.1",
 ]
 
 [project.optional-dependencies]
@@ -43,6 +46,7 @@ dev = [
     "pytest-cov>=4.0",
     "pytest-mock>=3.10",
     "pytest-timeout>=2.0",
+    "pytest-asyncio>=0.21.0",
     "ruff>=0.1.0",
     "mypy>=1.0",
 ]

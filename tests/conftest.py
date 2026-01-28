@@ -1,4 +1,4 @@
-"""Pytest configuration and shared fixtures for worldview-extractor tests."""
+"""Pytest configuration and shared fixtures for Weave tests."""
 
 import json
 from pathlib import Path
