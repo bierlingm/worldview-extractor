@@ -1084,6 +1084,80 @@ def from_urls(
         console.print(f"\nSaved to: {output_path}/")
 
 
+# === Ingestion Commands (v0.3) ===
+
+
+@main.command()
+@click.argument("input", nargs=-1, required=True)
+@click.option("--output", "-o", type=click.Path(), default="./sources", help="Output directory for ingested sources")
+@click.option("--format", "-f", help="Auto-detect format or specify (youtube, substack, twitter, markdown, pdf, text)")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON (for automation)")
+def ingest(
+    input: tuple[str, ...],
+    output: str,
+    format: str | None,
+    as_json: bool,
+) -> None:
+    """Ingest content from arbitrary text sources.
+
+    INPUT can be:
+    - YouTube video URLs
+    - Substack article URLs
+    - Twitter/X thread URLs
+    - Markdown file paths (.md, .markdown)
+    - PDF file paths (.pdf)
+    - Plain text file paths
+    - Raw text directly
+
+    Examples:
+        wve ingest https://youtube.com/watch?v=... -o sources/
+        wve ingest https://substack.com/p/... -o sources/
+        wve ingest ./blog.md ./book.pdf -o sources/
+        wve ingest "Any raw text content here" -o sources/
+    """
+    from rich.console import Console
+    from wve.ingest import ingest_auto, ingest_batch
+
+    console = Console(stderr=True)
+    output_dir = Path(output)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if not as_json:
+        console.print(f"Ingesting {len(input)} source(s)...")
+
+    # Ingest all inputs
+    sources = ingest_batch(list(input), output_dir)
+
+    if not sources:
+        if not as_json:
+            console.print("[yellow]No content ingested from inputs[/yellow]")
+        raise SystemExit(1)
+
+    if as_json:
+        sources_json = [s.model_dump() for s in sources.values()]
+        click.echo(json.dumps(sources_json, indent=2, default=str))
+    else:
+        from rich.table import Table
+
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("Source ID", width=25)
+        table.add_column("Type", width=10)
+        table.add_column("Format", width=12)
+        table.add_column("Characters", width=12)
+
+        for source in sorted(sources.values(), key=lambda s: s.ingested_at):
+            table.add_row(
+                source.source_id,
+                source.source_type,
+                source.raw_format,
+                f"{len(source.text):,}",
+            )
+
+        console.print(table)
+        console.print(f"\n[green]Ingested {len(sources)} source(s)[/green]")
+        console.print(f"Saved to: {output_dir}/")
+
+
 # === Analysis Commands (v0.2) ===
 
 
