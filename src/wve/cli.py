@@ -8,14 +8,173 @@ import click
 from wve import __version__
 
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.version_option(version=__version__, prog_name="wve")
 @click.option("--debug/--no-debug", default=False, help="Enable debug logging")
+@click.argument("subject", required=False)
+@click.option("--search", "-s", is_flag=True, help="Use YouTube search")
+@click.option("--channel", "-c", help="YouTube channel URL")
+@click.option("--yes", "-y", is_flag=True, help="Auto-accept likely candidates, no interaction")
 @click.pass_context
-def main(ctx: click.Context, debug: bool) -> None:
-    """Weave - Synthesize intellectual worldviews from arbitrary text sources."""
+def main(ctx: click.Context, debug: bool, subject: str | None, search: bool, channel: str | None, yes: bool) -> None:
+    """Weave - Synthesize intellectual worldviews from arbitrary text sources.
+    
+    \b
+    Progressive disclosure:
+      wve                    Full interactive TUI
+      wve "Naval"            Skip subject prompt, go to source selection
+      wve "Naval" --search   Skip to YouTube search directly
+      wve "Naval" -s -y      Auto-accept likely candidates, no interaction
+    """
     ctx.ensure_object(dict)
     ctx.obj["debug"] = debug
+    
+    # Launch TUI if no subcommand given
+    if ctx.invoked_subcommand is None:
+        # Handle fully non-interactive mode: subject + search + yes
+        if subject and search and yes:
+            _run_non_interactive(subject, channel)
+            return
+        
+        try:
+            from wve.tui.app import WveApp
+            from wve.tui.wizard import WizardState
+            
+            # Build pre-filled state based on CLI args
+            prefilled_state = None
+            if subject:
+                prefilled_state = WizardState()
+                prefilled_state.subject = subject
+                if search:
+                    prefilled_state.source_type = "search"
+                elif channel:
+                    prefilled_state.source_type = "channel"
+                    prefilled_state.channel_url = channel
+            
+            app = WveApp(prefilled_state=prefilled_state)
+            result = app.run()
+            
+            # Handle wizard result
+            if result and isinstance(result, dict) and "command" in result:
+                click.echo()
+                click.secho("  Run this command to start extraction:", fg="cyan")
+                click.echo()
+                click.secho(f"    {result['command']}", fg="green", bold=True)
+                click.echo()
+                
+                if click.confirm("  Run it now?", default=True):
+                    import subprocess
+                    import shlex
+                    click.echo()
+                    # Execute the command
+                    subprocess.run(result["command"], shell=True)
+                else:
+                    click.echo()
+                    click.echo("  [Copied to clipboard - paste to run]")
+                    # Try to copy to clipboard
+                    try:
+                        import subprocess
+                        subprocess.run(["pbcopy"], input=result["command"].encode(), check=True)
+                    except Exception:
+                        pass
+                        
+        except ImportError:
+            # textual not installed, offer to install
+            import subprocess
+            import sys
+            
+            click.echo()
+            click.secho("  Interactive TUI requires 'textual' package.", fg="yellow")
+            click.echo()
+            
+            if click.confirm("  Install it now?", default=True):
+                click.echo()
+                click.secho("  Installing textual...", fg="cyan")
+                result = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "textual>=0.50.0"],
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode == 0:
+                    click.secho("  Done! Launching TUI...", fg="green")
+                    click.echo()
+                    # Re-import and run
+                    from wve.tui.app import WveApp
+                    app = WveApp()
+                    app.run()
+                else:
+                    click.secho(f"  Install failed: {result.stderr}", fg="red")
+                    click.echo("  Try manually: pip install 'wve[tui]'")
+            else:
+                click.echo()
+                click.echo("  Run 'wve --help' for CLI commands.")
+
+
+def _run_non_interactive(subject: str, channel: str | None = None) -> None:
+    """Run fully non-interactive extraction: discover, auto-accept likely, fetch."""
+    import subprocess
+    
+    from rich.console import Console
+    
+    from wve.classify import CandidateSet, VideoCandidate, classify_candidates
+    from wve.identity import slugify
+    from wve.search import search_videos
+    from wve.transcripts import download_transcript
+    from wve.store import get_entry_dir
+    
+    console = Console(stderr=True)
+    
+    console.print(f"[bold]Non-interactive extraction for: {subject}[/bold]")
+    
+    # Search
+    console.print(f"[dim]Searching YouTube...[/dim]")
+    results = search_videos(subject, max_results=20, channel=channel)
+    
+    # Convert and classify
+    candidates = [
+        VideoCandidate(
+            id=v.id,
+            title=v.title,
+            channel=v.channel,
+            channel_id=v.channel_id,
+            duration_seconds=v.duration_seconds,
+            url=v.url,
+            published=v.published,
+        )
+        for v in results.videos
+    ]
+    
+    classify_candidates(candidates, subject, None)
+    
+    # Auto-accept likely candidates
+    likely = [c for c in candidates if c.classification == "likely"]
+    
+    if not likely:
+        console.print("[yellow]No likely candidates found. Try interactive mode.[/yellow]")
+        return
+    
+    console.print(f"[green]Found {len(likely)} likely candidates[/green]")
+    
+    # Download transcripts
+    slug = slugify(subject)
+    output_dir = get_entry_dir(slug) / "transcripts"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    console.print(f"[dim]Downloading transcripts to {output_dir}...[/dim]")
+    
+    succeeded = 0
+    for c in likely:
+        result = download_transcript(c.url, output_dir, "en")
+        if result:
+            succeeded += 1
+    
+    console.print(f"[green]Downloaded {succeeded}/{len(likely)} transcripts[/green]")
+    
+    if succeeded > 0:
+        # Run analysis
+        cmd = f'wve run "{output_dir}" -s "{subject}" --report-only'
+        console.print(f"[dim]Running: {cmd}[/dim]")
+        subprocess.run(cmd, shell=True)
 
 
 # === Primary Entry Point ===
@@ -81,8 +240,13 @@ def run(
     from wve.quotes import extract_quotes_from_dir
     from wve.store import WorldviewEntry, get_entry_dir, get_store_dir, load_entry, save_entry
     from wve.transcripts import download_transcript
+    from wve.theme import get_console
 
-    console = Console(stderr=True)
+    console = get_console()
+    
+    if not as_json:
+        from wve.branding import print_banner
+        print_banner(console)
 
     # Generate slug from subject
     slug = slugify(subject)
@@ -408,57 +572,28 @@ def run(
         return
 
     # === Success Output ===
-    console.print()
+    from wve.ui.panels import completion_panel
 
-    # Summary panel
     theme_str = ", ".join(w.title() for w, _ in top_themes[:5])
-    if use_store:
-        location_info = f"[bold]Stored as:[/bold] [cyan]{slug}[/cyan]"
-    else:
-        location_info = f"[bold]Saved to:[/bold] [cyan]{output_path}[/cyan]"
 
-    console.print(Panel(
-        f"[green bold]{subject}[/green bold]\n\n"
-        f"[bold]Sources:[/bold] {collection.source_count} transcript(s)\n"
-        f"[bold]Quotes:[/bold] {len(collection.quotes)} notable quotes\n"
-        f"[bold]Contrarian:[/bold] {len(contrarian)} distinctive views\n"
-        f"[bold]Themes:[/bold] {theme_str}\n\n"
-        f"{location_info}",
-        title="[green]✓ Worldview Extracted[/green]",
-        border_style="green",
-    ))
-
-    # Top quotes preview
-    if collection.quotes:
-        console.print()
-        console.print("[bold]Top quotes:[/bold]")
-        for i, q in enumerate(collection.quotes[:3], 1):
-            text = q.text[:100] + "..." if len(q.text) > 100 else q.text
-            console.print(f"  [dim]{i}.[/dim] \"{text}\"")
-
-    # Next steps
-    console.print()
-    console.print("[dim]─────────────────────────────────────────[/dim]")
-    console.print()
-    console.print("[bold]What's next?[/bold]")
-    console.print()
-
-    if use_store:
-        console.print(f"  [cyan]wve store show {slug}[/cyan]       View full details")
-        console.print(f"  [cyan]wve ask {transcripts_dir} \"question\"[/cyan]")
-        console.print(f"                              Ask questions about the content")
-        console.print(f"  [cyan]cat {report_path}[/cyan]")
-        console.print(f"                              Read the full report")
-        console.print()
-        console.print(f"  [cyan]wve store list[/cyan]            See all your worldviews")
-        console.print(f"  [cyan]wve store delete {slug}[/cyan]    Remove this worldview")
-    else:
-        console.print(f"  [cyan]cat {report_path}[/cyan]")
-        console.print(f"                              Read the full report")
-        console.print(f"  [cyan]wve ask {transcripts_dir} \"question\"[/cyan]")
-        console.print(f"                              Ask questions about the content")
-
-    console.print()
+    panel = completion_panel(
+        title=f"Worldview Extracted: {subject}",
+        stats={
+            "Sources": f"{collection.source_count} transcript(s)",
+            "Quotes": f"{len(collection.quotes)} notable quotes",
+            "Contrarian": f"{len(contrarian)} distinctive views",
+            "Themes": theme_str,
+        },
+        next_steps=[
+            (f"wve store show {slug}", "View full details"),
+            (f"wve ask {transcripts_dir} \"question\"", "Ask questions about the content"),
+            (f"cat {report_path}", "Read the full report"),
+        ] if use_store else [
+            (f"cat {report_path}", "Read the full report"),
+            (f"wve ask {transcripts_dir} \"question\"", "Ask questions about the content"),
+        ],
+    )
+    console.print(panel)
 
 
 # === Identity Commands (v0.2) ===
@@ -2106,7 +2241,7 @@ def report(
 # === Legacy v0.1 Commands ===
 
 
-@main.command()
+@main.command(hidden=True)
 @click.argument("person")
 @click.option("--max-results", "-n", default=10, help="Maximum videos to find")
 @click.option("--channel", help="Limit to specific channel URL")
@@ -2125,7 +2260,7 @@ def search(
     strict: bool,
     as_json: bool,
 ) -> None:
-    """Discover videos featuring PERSON."""
+    """[Deprecated] Discover videos featuring PERSON. Use 'wve discover' instead."""
     from wve.search import save_search_results, search_videos
 
     if not as_json:
@@ -2153,13 +2288,13 @@ def search(
             click.echo(f"  [{v.id}] {v.title} ({v.duration_seconds // 60}m)")
 
 
-@main.command()
+@main.command(hidden=True)
 @click.argument("input", type=click.Path(exists=True))
 @click.option("--lang", default="en", help="Preferred language code")
 @click.option("--fallback-whisper", is_flag=True, help="Use Whisper if no captions")
 @click.option("--output-dir", "-o", type=click.Path(), default="./transcripts", help="Output directory")
 def transcripts(input: str, lang: str, fallback_whisper: bool, output_dir: str) -> None:
-    """Download and preprocess transcripts from INPUT (URL, ID, or search JSON)."""
+    """[Deprecated] Download and preprocess transcripts from INPUT. Use 'wve run' or 'wve fetch' instead."""
     from wve.search import load_search_results
     from wve.transcripts import download_transcripts
 
@@ -2178,7 +2313,7 @@ def transcripts(input: str, lang: str, fallback_whisper: bool, output_dir: str) 
     click.echo(f"Downloaded {len(manifest.transcripts)} transcripts to {output_dir}")
 
 
-@main.command()
+@main.command(hidden=True)
 @click.argument("input", type=click.Path(exists=True))
 @click.option(
     "--method",
@@ -2190,7 +2325,7 @@ def transcripts(input: str, lang: str, fallback_whisper: bool, output_dir: str) 
 @click.option("--top", "-n", default=50, help="Number of items per category")
 @click.option("--output", "-o", type=click.Path(), help="Output JSON file")
 def extract(input: str, method: str, top: int, output: str | None) -> None:
-    """Extract themes, keywords, and entities from transcripts."""
+    """[Deprecated] Extract themes, keywords, and entities. Use 'wve themes' or 'wve quotes' instead."""
     from wve.extract import (
         extract_all,
         extract_cooccurrences,
@@ -2226,13 +2361,13 @@ def extract(input: str, method: str, top: int, output: str | None) -> None:
         click.echo(f"Saved to {output}")
 
 
-@main.command()
+@main.command(hidden=True)
 @click.argument("input", type=click.Path(exists=True))
 @click.option("--model", default="all-MiniLM-L6-v2", help="Embedding model")
 @click.option("--n-clusters", "-n", default=0, help="Number of clusters (0=auto)")
 @click.option("--output", "-o", type=click.Path(), help="Output JSON file")
 def cluster(input: str, model: str, n_clusters: int, output: str | None) -> None:
-    """Cluster extracted themes into conceptual groups."""
+    """[Deprecated] Cluster extracted themes into conceptual groups. Use 'wve themes' instead."""
     from wve.cluster import cluster_extraction, save_clusters
     from wve.models import Extraction
 
@@ -2251,7 +2386,7 @@ def cluster(input: str, model: str, n_clusters: int, output: str | None) -> None
         click.echo(f"Saved to {output}")
 
 
-@main.command()
+@main.command(hidden=True)
 @click.argument("input", type=click.Path(exists=True))
 @click.option(
     "--depth",
@@ -2267,7 +2402,7 @@ def cluster(input: str, model: str, n_clusters: int, output: str | None) -> None
 @click.option("--extraction", "-e", "extraction_path", type=click.Path(exists=True), help="Extraction JSON (required for medium/deep if INPUT is clusters)")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON (for automation)")
 def synthesize(input: str, depth: str, points: int, model: str, output: str | None, subject: str, extraction_path: str | None, as_json: bool) -> None:
-    """Synthesize worldview points from extracted/clustered data."""
+    """[Deprecated] Synthesize worldview points from extracted/clustered data. Use 'wve run' instead."""
     from wve.cluster import load_clusters
     from wve.models import Extraction
     from wve.synthesize import save_worldview
@@ -2314,7 +2449,7 @@ def synthesize(input: str, depth: str, points: int, model: str, output: str | No
             click.echo(f"\nSaved to {output}")
 
 
-@main.command()
+@main.command(hidden=True)
 @click.argument("person")
 @click.option(
     "--depth",
@@ -2327,7 +2462,7 @@ def synthesize(input: str, depth: str, points: int, model: str, output: str | No
 @click.option("--output-dir", "-o", type=click.Path(), default="./output", help="Working directory")
 @click.option("--cache/--no-cache", default=True, help="Use cached intermediates")
 def pipeline(person: str, depth: str, max_videos: int, output_dir: str, cache: bool) -> None:
-    """End-to-end pipeline for PERSON."""
+    """[Deprecated] End-to-end pipeline for PERSON. Use 'wve run' instead."""
     from wve.cluster import cluster_extraction, save_clusters
     from wve.extract import extract_all, load_transcripts, save_extraction
     from wve.search import save_search_results, search_videos
@@ -2750,6 +2885,46 @@ def store_delete(slug: str, yes: bool) -> None:
     
     delete_entry(slug)
     console.print(f"[green]Deleted: {slug}[/green]")
+
+
+@main.command(name="browse")
+@click.option("--no-tui", is_flag=True, help="List without interactive mode")
+def browse_cmd(no_tui: bool) -> None:
+    """Browse stored worldviews."""
+    if no_tui:
+        from rich.table import Table
+        from wve.store import list_entries
+        from wve.theme import get_console
+
+        console = get_console()
+        entries = list_entries()
+
+        if not entries:
+            console.print("[dim]No worldviews stored yet.[/dim]")
+            console.print("Run [cyan]wve run[/cyan] to create your first worldview.")
+            return
+
+        table = Table(title="Worldview Library", show_header=True)
+        table.add_column("Slug", style="cyan")
+        table.add_column("Name")
+        table.add_column("Sources", justify="right")
+        table.add_column("Quotes", justify="right")
+
+        for e in entries:
+            table.add_row(e.slug, e.display_name, str(e.source_count), str(e.quote_count))
+
+        console.print(table)
+    else:
+        try:
+            from wve.tui.browser import BrowserApp
+            app = BrowserApp()
+            app.run()
+        except ImportError:
+            click.echo("TUI requires textual. Install with: pip install 'wve[tui]'")
+            raise SystemExit(1)
+
+
+main.add_command(browse_cmd, name="b")
 
 
 if __name__ == "__main__":
