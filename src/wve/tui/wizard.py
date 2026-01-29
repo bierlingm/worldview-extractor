@@ -4,7 +4,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.screen import Screen
-from textual.widgets import Static, Input, RadioSet, RadioButton, TextArea
+from textual.widgets import Static, Input, TextArea
 from textual.validation import Length
 
 STEP_SUBJECT = "subject"
@@ -31,6 +31,10 @@ class WizardScreen(Screen):
         Binding("escape", "back", "Back", show=False),
         Binding("enter", "next", "Next", show=False),
         Binding("ctrl+n", "next", "Next", show=False),
+        Binding("1", "source_1", "YouTube search", show=False),
+        Binding("2", "source_2", "Channel URL", show=False),
+        Binding("3", "source_3", "Video URLs", show=False),
+        Binding("4", "source_4", "Local files", show=False),
     ]
     
     def __init__(self, prefilled_state: WizardState | None = None):
@@ -93,13 +97,12 @@ class WizardScreen(Screen):
         container.mount(Static(""))
         container.mount(Static(f"Where should we find content about [bold]{self.state.subject}[/bold]?"))
         container.mount(Static(""))
-        radio_set = RadioSet(id="source-type")
-        radio_set.mount(RadioButton("YouTube search", id="search", value=self.state.source_type == "search"))
-        radio_set.mount(RadioButton("YouTube channel URL", id="channel", value=self.state.source_type == "channel"))
-        radio_set.mount(RadioButton("Paste video URLs", id="urls", value=self.state.source_type == "urls"))
-        radio_set.mount(RadioButton("Local transcript files", id="files", value=self.state.source_type == "files"))
-        container.mount(radio_set)
-        self.call_after_refresh(lambda: radio_set.focus())
+        container.mount(Static("  [bold cyan]1[/] YouTube search"))
+        container.mount(Static("  [bold cyan]2[/] YouTube channel URL"))
+        container.mount(Static("  [bold cyan]3[/] Paste video URLs"))
+        container.mount(Static("  [bold cyan]4[/] Local transcript files"))
+        container.mount(Static(""))
+        container.mount(Static("[dim]Press 1-4 to select source type[/dim]"))
     
     def _render_urls_step(self, container: Vertical) -> None:
         container.mount(Static("[bold]Step 2b: Enter URLs[/bold]"))
@@ -141,13 +144,15 @@ class WizardScreen(Screen):
     def _update_hints(self) -> None:
         hints = self.query_one("#key-hints", Static)
         if self.step == STEP_SUBJECT:
-            hints.update("[esc] cancel  [enter] next")
+            hints.update("[bold cyan]esc[/] cancel  [bold cyan]enter[/] next")
+        elif self.step == STEP_SOURCE:
+            hints.update("[bold cyan]1-4[/] select  [bold cyan]esc[/] back")
         elif self.step == STEP_URLS:
-            hints.update("[esc] back  [ctrl+n] next")
+            hints.update("[bold cyan]esc[/] back  [bold cyan]ctrl+n[/] next")
         elif self.step == STEP_CONFIRM:
-            hints.update("[esc] back  [enter] run extraction")
+            hints.update("[bold cyan]esc[/] back  [bold cyan]enter[/] run extraction")
         else:
-            hints.update("[esc] back  [enter] next")
+            hints.update("[bold cyan]esc[/] back  [bold cyan]enter[/] next")
     
     def _source_description(self) -> str:
         if self.state.source_type == "search":
@@ -179,12 +184,30 @@ class WizardScreen(Screen):
         if self.step in (STEP_SUBJECT, STEP_CHANNEL):
             self.action_next()
     
-    def on_key(self, event) -> None:
-        if event.key == "enter" and self.step == STEP_SOURCE:
-            focused = self.focused
-            if isinstance(focused, (RadioSet, RadioButton)):
-                self.action_next()
-                event.prevent_default()
+    def _select_source(self, source_type: str) -> None:
+        """Select source type and advance."""
+        if self.step != STEP_SOURCE:
+            return
+        self.state.source_type = source_type
+        if source_type == "urls":
+            self.step = STEP_URLS
+        elif source_type == "channel":
+            self.step = STEP_CHANNEL
+        else:
+            self.step = STEP_CONFIRM
+        self._render_step()
+    
+    def action_source_1(self) -> None:
+        self._select_source("search")
+    
+    def action_source_2(self) -> None:
+        self._select_source("channel")
+    
+    def action_source_3(self) -> None:
+        self._select_source("urls")
+    
+    def action_source_4(self) -> None:
+        self._select_source("files")
     
     def action_back(self) -> None:
         if self.step == STEP_SUBJECT:
@@ -216,20 +239,8 @@ class WizardScreen(Screen):
                 pass
         
         elif self.step == STEP_SOURCE:
-            try:
-                radio_set = self.query_one("#source-type", RadioSet)
-                if radio_set.pressed_button:
-                    self.state.source_type = radio_set.pressed_button.id or "search"
-                
-                if self.state.source_type == "urls":
-                    self.step = STEP_URLS
-                elif self.state.source_type == "channel":
-                    self.step = STEP_CHANNEL
-                else:
-                    self.step = STEP_CONFIRM
-                self._render_step()
-            except Exception:
-                pass
+            # Source selection is handled by 1-4 keys, not enter
+            pass
         
         elif self.step == STEP_URLS:
             try:
