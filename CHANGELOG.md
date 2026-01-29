@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-01-29 "Central Library"
+
+### Changed
+
+**Central store is now the default** — Worldviews are automatically saved to `~/.wve/store/{slug}/` instead of the current directory. This creates a persistent library of all extracted worldviews.
+
+- Use `-o <path>` to save locally instead
+- Use `wve store list` to see your collection
+- Use `wve store show <slug>` to view details
+
+**Enhanced UX with rich output**:
+- Progress bars with spinners during downloads
+- Success panel showing summary stats
+- Top quote previews in terminal output
+- Contextual "What's next?" suggestions
+- Helpful error messages with recovery tips
+
+### Fixed
+
+- Theme tokenization now properly strips punctuation (no more "It'S" or trailing commas)
+- Expanded stopwords to filter contractions and filler words
+
 ## [0.4.0] - 2026-01-29 "One Shot"
 
 ### Added
