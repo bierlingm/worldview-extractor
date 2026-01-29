@@ -11,7 +11,7 @@ from wve import __version__
 @click.group(invoke_without_command=True)
 @click.version_option(version=__version__, prog_name="wve")
 @click.option("--debug/--no-debug", default=False, help="Enable debug logging")
-@click.argument("subject", required=False)
+@click.option("--subject", "-S", help="Pre-fill subject name (skips subject prompt)")
 @click.option("--search", "-s", is_flag=True, help="Use YouTube search")
 @click.option("--channel", "-c", help="YouTube channel URL")
 @click.option("--yes", "-y", is_flag=True, help="Auto-accept likely candidates, no interaction")
@@ -20,11 +20,16 @@ def main(ctx: click.Context, debug: bool, subject: str | None, search: bool, cha
     """Weave - Synthesize intellectual worldviews from arbitrary text sources.
     
     \b
-    Progressive disclosure:
-      wve                    Full interactive TUI
-      wve "Naval"            Skip subject prompt, go to source selection
-      wve "Naval" --search   Skip to YouTube search directly
-      wve "Naval" -s -y      Auto-accept likely candidates, no interaction
+    Interactive mode:
+      wve                           Full interactive TUI
+      wve -S "Naval"                Skip subject prompt
+      wve -S "Naval" --search       Skip to YouTube search  
+      wve -S "Naval" -s -y          Non-interactive extraction
+    
+    \b
+    Direct commands:
+      wve discover "Naval"          Search YouTube for candidates
+      wve run -s "Naval" ./dir/     Extract from local transcripts
     """
     ctx.ensure_object(dict)
     ctx.obj["debug"] = debug
