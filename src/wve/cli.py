@@ -200,6 +200,7 @@ def run(
     collection = extract_quotes_from_dir(transcripts_dir, max_quotes=100, min_score=0.2)
 
     # Build themes
+    import re
     from collections import Counter
     word_counts: Counter[str] = Counter()
     stopwords = {"the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
@@ -207,10 +208,18 @@ def run(
                  "should", "may", "might", "must", "shall", "can", "to", "of", "in",
                  "for", "on", "with", "at", "by", "from", "as", "or", "and", "but",
                  "if", "then", "so", "than", "that", "this", "these", "those", "it",
-                 "its", "you", "your", "i", "my", "me", "we", "our", "they", "their"}
+                 "its", "you", "your", "i", "my", "me", "we", "our", "they", "their",
+                 "it's", "don't", "doesn't", "didn't", "won't", "wouldn't", "can't",
+                 "couldn't", "shouldn't", "isn't", "aren't", "wasn't", "weren't",
+                 "haven't", "hasn't", "hadn't", "that's", "there's", "here's",
+                 "what's", "who's", "he's", "she's", "let's", "how's", "where's",
+                 "think", "know", "really", "just", "going", "people", "thing",
+                 "things", "like", "about", "what", "when", "where", "which", "there",
+                 "been", "very", "much", "more", "some", "only", "other", "into"}
 
     for quote in collection.quotes:
-        words = quote.text.lower().split()
+        # Tokenize: extract words, strip punctuation
+        words = re.findall(r"[a-z]+(?:'[a-z]+)?", quote.text.lower())
         meaningful = [w for w in words if len(w) > 3 and w not in stopwords]
         word_counts.update(meaningful)
 
