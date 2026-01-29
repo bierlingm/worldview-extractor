@@ -24,10 +24,9 @@ def main(ctx: click.Context, debug: bool) -> None:
 @main.command()
 @click.argument("input", nargs=-1, required=False)
 @click.option("--subject", "-s", required=True, help="Subject name for the worldview")
-@click.option("--output", "-o", type=click.Path(), default="./wve-output", help="Output directory")
+@click.option("--output", "-o", type=click.Path(), help="Save to local directory instead of store")
 @click.option("--url", "-u", multiple=True, help="Additional URL(s) to include")
 @click.option("--lang", default="en", help="Transcript language")
-@click.option("--save", is_flag=True, help="Persist to store after completion")
 @click.option("--force", is_flag=True, help="Re-download even if transcripts exist")
 @click.option("--fetch-only", is_flag=True, help="Download transcripts only, no analysis")
 @click.option("--report-only", is_flag=True, help="Analyze existing transcripts only")
@@ -35,49 +34,85 @@ def main(ctx: click.Context, debug: bool) -> None:
 def run(
     input: tuple[str, ...],
     subject: str,
-    output: str,
+    output: str | None,
     url: tuple[str, ...],
     lang: str,
-    save: bool,
     force: bool,
     fetch_only: bool,
     report_only: bool,
     as_json: bool,
 ) -> None:
-    """One-shot worldview extraction from any source.
+    """Build your worldview library from any source.
+
+    Every run is automatically saved to your library (~/.wve/store/).
+    Use -o to save to a local directory instead.
 
     INPUT can be:
-    - YouTube video URL(s)
-    - Local transcript file(s) (.txt, .md)
-    - Directory of existing transcripts
-    - File containing URLs (one per line)
+    \b
+      - YouTube URLs      https://youtube.com/watch?v=...
+      - URL list files    urls.txt (one URL per line)
+      - Transcript files  transcript.txt, notes.md
+      - Directories       ./transcripts/
 
+    \b
     Examples:
-        wve run https://youtube.com/watch?v=xyz -s "Person Name"
-        wve run ./transcripts/ -s "Person Name" --report-only
-        wve run urls.txt -s "Person Name" -o ./output
-        wve run -u URL1 -u URL2 -s "Person Name"
+      wve run https://youtu.be/xyz -s "Naval Ravikant"
+      wve run urls.txt -s "Naval Ravikant"
+      wve run -u URL1 -u URL2 -s "Naval Ravikant"
+      wve run ./transcripts/ -s "Naval" --report-only
+
+    \b
+    After running:
+      wve store list              List all worldviews
+      wve store show <slug>       View a worldview
+      wve store delete <slug>     Remove a worldview
     """
+    import re
+    import shutil
+    from collections import Counter
+    from datetime import datetime
     from pathlib import Path
 
     from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
 
-    from wve.identity import extract_video_id
+    from wve.identity import extract_video_id, slugify
     from wve.quotes import extract_quotes_from_dir
+    from wve.store import WorldviewEntry, get_entry_dir, get_store_dir, load_entry, save_entry
     from wve.transcripts import download_transcript
 
     console = Console(stderr=True)
-    output_path = Path(output)
+
+    # Generate slug from subject
+    slug = slugify(subject)
+
+    # Determine output location
+    use_store = output is None
+    if use_store:
+        output_path = get_entry_dir(slug)
+    else:
+        output_path = Path(output)
+
     transcripts_dir = output_path / "transcripts"
 
     # Collect all inputs
     all_inputs = list(input) + list(url)
 
+    # === Input Validation ===
     if not all_inputs and not report_only:
-        console.print("[red]No input provided. Use positional args or --url flags.[/red]")
+        console.print()
+        console.print("[red bold]No input provided[/red bold]")
+        console.print()
+        console.print("Provide sources using positional arguments or --url flags:")
+        console.print()
+        console.print("  [cyan]wve run[/cyan] [green]https://youtu.be/xyz[/green] [yellow]-s \"Person Name\"[/yellow]")
+        console.print("  [cyan]wve run[/cyan] [green]urls.txt[/green] [yellow]-s \"Person Name\"[/yellow]")
+        console.print("  [cyan]wve run[/cyan] [yellow]-u[/yellow] [green]URL1[/green] [yellow]-u[/yellow] [green]URL2[/green] [yellow]-s \"Person Name\"[/yellow]")
+        console.print()
         raise SystemExit(1)
 
-    # Classify inputs
+    # === Input Classification ===
     def classify_input(inp: str) -> str:
         """Return 'url', 'file', 'dir', or 'url_list'."""
         if inp.startswith(("http://", "https://")):
@@ -86,7 +121,6 @@ def run(
         if p.is_dir():
             return "dir"
         if p.is_file():
-            # Check if it's a list of URLs
             try:
                 content = p.read_text()
                 lines = [l.strip() for l in content.split("\n") if l.strip() and not l.startswith("#")]
@@ -107,101 +141,181 @@ def run(
             urls_to_fetch.append(inp)
         elif inp_type == "url_list":
             with open(inp) as f:
+                url_count = 0
                 for line in f:
                     line = line.strip()
                     if line and not line.startswith("#"):
                         urls_to_fetch.append(line)
+                        url_count += 1
+            if not as_json:
+                console.print(f"[dim]Loaded {url_count} URLs from {inp}[/dim]")
         elif inp_type == "dir":
             existing_transcript_dir = Path(inp)
+            if not as_json:
+                txt_count = len(list(existing_transcript_dir.glob("*.txt")))
+                console.print(f"[dim]Found directory with {txt_count} transcript(s)[/dim]")
         elif inp_type == "file":
             local_files.append(Path(inp))
         else:
-            console.print(f"[yellow]Unknown input: {inp}[/yellow]")
+            console.print()
+            console.print(f"[yellow bold]Unknown input:[/yellow bold] {inp}")
+            console.print()
+            if not Path(inp).exists():
+                console.print(f"  File or directory does not exist: [red]{inp}[/red]")
+                console.print()
+                console.print("  Did you mean to provide a URL? Make sure it starts with http:// or https://")
+            else:
+                console.print(f"  Could not determine input type for: {inp}")
+            console.print()
 
-    # Handle report-only mode
+    # === Report-Only Mode ===
     if report_only:
         if existing_transcript_dir:
             transcripts_dir = existing_transcript_dir
-        elif transcripts_dir.exists():
-            pass  # Use default output/transcripts
+        elif transcripts_dir.exists() and list(transcripts_dir.glob("*.txt")):
+            pass  # Use existing transcripts in output dir
         else:
-            console.print("[red]No transcripts found. Run without --report-only first.[/red]")
+            console.print()
+            console.print("[red bold]No transcripts found for --report-only[/red bold]")
+            console.print()
+            console.print("Provide a directory containing transcript files:")
+            console.print()
+            console.print("  [cyan]wve run[/cyan] [green]./transcripts/[/green] [yellow]-s \"Person\" --report-only[/yellow]")
+            console.print()
+            console.print("Or run without --report-only to download transcripts first:")
+            console.print()
+            console.print("  [cyan]wve run[/cyan] [green]https://youtu.be/xyz[/green] [yellow]-s \"Person\"[/yellow]")
+            console.print()
             raise SystemExit(1)
     else:
-        # Create output directory
+        # Create output directories
         output_path.mkdir(parents=True, exist_ok=True)
         transcripts_dir.mkdir(parents=True, exist_ok=True)
 
-        # Check resume logic
+        # === Resume Logic ===
         existing_transcripts = list(transcripts_dir.glob("*.txt"))
         if existing_transcripts and not force:
             if not as_json:
-                console.print(f"[dim]Found {len(existing_transcripts)} existing transcripts. Use --force to re-download.[/dim]")
+                console.print()
+                console.print(f"[cyan]Found {len(existing_transcripts)} existing transcript(s)[/cyan]")
+                console.print("[dim]Skipping download. Use --force to re-download.[/dim]")
         else:
-            # Download URLs
+            # === Download Transcripts ===
             if urls_to_fetch:
                 if not as_json:
-                    console.print(f"Downloading {len(urls_to_fetch)} transcript(s)...")
+                    console.print()
+                    console.print(f"[bold]Downloading {len(urls_to_fetch)} transcript(s)...[/bold]")
 
-                from rich.progress import Progress
+                from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
+                succeeded = []
                 failed = []
-                with Progress(console=console, disable=as_json) as progress:
-                    task = progress.add_task("Fetching...", total=len(urls_to_fetch))
+
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(),
+                    TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                    TimeElapsedColumn(),
+                    console=console,
+                    disable=as_json,
+                ) as progress:
+                    task = progress.add_task("Fetching transcripts...", total=len(urls_to_fetch))
                     for video_url in urls_to_fetch:
+                        vid_id = "unknown"
                         try:
                             vid_id = extract_video_id(video_url)
                             progress.update(task, description=f"[dim]{vid_id}[/dim]")
                         except Exception:
-                            pass
+                            progress.update(task, description=f"[dim]{video_url[:30]}...[/dim]")
+
                         result = download_transcript(video_url, transcripts_dir, lang)
-                        if not result:
-                            failed.append(video_url)
+                        if result:
+                            succeeded.append(vid_id)
+                        else:
+                            failed.append((vid_id, video_url))
                         progress.advance(task)
 
-                if failed and not as_json:
-                    console.print(f"[yellow]Failed to fetch {len(failed)} transcript(s)[/yellow]")
+                if not as_json:
+                    if succeeded:
+                        console.print(f"[green]✓ Downloaded {len(succeeded)} transcript(s)[/green]")
+                    if failed:
+                        console.print()
+                        console.print(f"[yellow bold]⚠ Failed to download {len(failed)} transcript(s)[/yellow bold]")
+                        console.print()
+                        for vid_id, url in failed[:5]:
+                            console.print(f"  [dim]•[/dim] {vid_id}: No captions available")
+                        if len(failed) > 5:
+                            console.print(f"  [dim]... and {len(failed) - 5} more[/dim]")
+                        console.print()
+                        console.print("[dim]Tip: Some videos don't have captions. Try videos with [CC] indicator.[/dim]")
 
-            # Copy local files
+            # === Copy Local Files ===
             if local_files:
-                import shutil
                 for lf in local_files:
                     dest = transcripts_dir / lf.name
                     if not dest.exists() or force:
                         shutil.copy(lf, dest)
                 if not as_json:
-                    console.print(f"Copied {len(local_files)} local file(s)")
+                    console.print(f"[green]✓ Copied {len(local_files)} local file(s)[/green]")
 
-            # Use existing transcript dir if provided
+            # === Copy from Existing Directory ===
             if existing_transcript_dir and existing_transcript_dir != transcripts_dir:
-                import shutil
+                copied = 0
                 for f in existing_transcript_dir.glob("*.txt"):
                     shutil.copy(f, transcripts_dir / f.name)
+                    copied += 1
+                if not as_json and copied:
+                    console.print(f"[green]✓ Copied {copied} transcript(s) from {existing_transcript_dir}[/green]")
 
-    # Fetch-only mode stops here
+    # === Fetch-Only Mode ===
     if fetch_only:
         count = len(list(transcripts_dir.glob("*.txt")))
         if as_json:
-            click.echo(json.dumps({"transcripts_dir": str(transcripts_dir), "count": count}))
+            click.echo(json.dumps({"transcripts_dir": str(transcripts_dir), "count": count, "slug": slug}))
         else:
-            console.print(f"[green]Downloaded {count} transcript(s) to {transcripts_dir}[/green]")
+            console.print()
+            console.print(Panel(
+                f"[green bold]Downloaded {count} transcript(s)[/green bold]\n\n"
+                f"Location: [cyan]{transcripts_dir}[/cyan]\n\n"
+                f"[dim]To analyze these transcripts:[/dim]\n"
+                f"  wve run {transcripts_dir} -s \"{subject}\" --report-only",
+                title="Fetch Complete",
+                border_style="green",
+            ))
         return
 
-    # Verify we have transcripts
+    # === Verify Transcripts Exist ===
     transcript_files = list(transcripts_dir.glob("*.txt"))
     if not transcript_files:
-        console.print("[red]No transcripts found to analyze.[/red]")
+        console.print()
+        console.print("[red bold]No transcripts to analyze[/red bold]")
+        console.print()
+        if urls_to_fetch:
+            console.print("All transcript downloads failed. Possible causes:")
+            console.print()
+            console.print("  • Videos don't have captions enabled")
+            console.print("  • Videos are private or age-restricted")
+            console.print("  • Network connectivity issues")
+            console.print()
+            console.print("[dim]Tip: Try different videos, or provide local transcript files.[/dim]")
+        else:
+            console.print("No sources provided that could be analyzed.")
+            console.print()
+            console.print("Provide YouTube URLs or local transcript files:")
+            console.print()
+            console.print("  [cyan]wve run[/cyan] [green]https://youtu.be/xyz[/green] [yellow]-s \"Person\"[/yellow]")
+        console.print()
         raise SystemExit(1)
 
+    # === Analysis Phase ===
     if not as_json:
-        console.print(f"Analyzing {len(transcript_files)} transcript(s)...")
+        console.print()
+        console.print(f"[bold]Analyzing {len(transcript_files)} transcript(s)...[/bold]")
 
-    # Extract quotes and generate report
     collection = extract_quotes_from_dir(transcripts_dir, max_quotes=100, min_score=0.2)
 
-    # Build themes
-    import re
-    from collections import Counter
+    # === Theme Extraction ===
     word_counts: Counter[str] = Counter()
     stopwords = {"the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
                  "have", "has", "had", "do", "does", "did", "will", "would", "could",
@@ -215,10 +329,11 @@ def run(
                  "what's", "who's", "he's", "she's", "let's", "how's", "where's",
                  "think", "know", "really", "just", "going", "people", "thing",
                  "things", "like", "about", "what", "when", "where", "which", "there",
-                 "been", "very", "much", "more", "some", "only", "other", "into"}
+                 "been", "very", "much", "more", "some", "only", "other", "into",
+                 "said", "says", "saying", "want", "wants", "wanted", "need", "make",
+                 "made", "take", "took", "come", "came", "give", "gave", "look", "also"}
 
     for quote in collection.quotes:
-        # Tokenize: extract words, strip punctuation
         words = re.findall(r"[a-z]+(?:'[a-z]+)?", quote.text.lower())
         meaningful = [w for w in words if len(w) > 3 and w not in stopwords]
         word_counts.update(meaningful)
@@ -226,69 +341,41 @@ def run(
     top_themes = word_counts.most_common(10)
     contrarian = [q for q in collection.quotes if q.is_contrarian]
 
-    # Build result
-    from datetime import datetime
-    result = {
-        "subject": subject,
-        "generated_at": datetime.now().isoformat(),
-        "source_count": collection.source_count,
-        "total_quotes": len(collection.quotes),
-        "themes": [{"name": w.title(), "count": c} for w, c in top_themes],
-        "top_quotes": [q.model_dump() for q in collection.quotes[:20]],
-        "contrarian_quotes": [q.model_dump() for q in contrarian[:15]],
-        "transcripts_dir": str(transcripts_dir),
-    }
+    # === Generate Report ===
+    report_lines = [
+        f"# Worldview: {subject}",
+        "",
+        f"*Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}*",
+        "",
+        f"- **Sources:** {collection.source_count}",
+        f"- **Quotes:** {len(collection.quotes)}",
+        f"- **Contrarian views:** {len(contrarian)}",
+        "",
+        "## Themes",
+        "",
+    ]
+    for word, count in top_themes:
+        report_lines.append(f"- **{word.title()}** ({count}x)")
 
-    if as_json:
-        click.echo(json.dumps(result, indent=2, default=str))
-    else:
-        # Generate markdown report
-        lines = [
-            f"# Worldview: {subject}",
-            "",
-            f"*Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}*",
-            "",
-            f"- **Sources:** {collection.source_count}",
-            f"- **Quotes:** {len(collection.quotes)}",
-            "",
-            "## Themes",
-            "",
-        ]
-        for word, count in top_themes:
-            lines.append(f"- **{word.title()}** ({count}x)")
+    report_lines.extend(["", "## Notable Quotes", ""])
+    for i, q in enumerate(collection.quotes[:15], 1):
+        report_lines.append(f'{i}. "{q.text}"')
+        report_lines.append(f"   *— {q.source_id}*")
+        report_lines.append("")
 
-        lines.extend(["", "## Notable Quotes", ""])
-        for i, q in enumerate(collection.quotes[:15], 1):
-            lines.append(f'{i}. "{q.text}"')
-            lines.append(f"   *— {q.source_id}*")
-            lines.append("")
+    if contrarian:
+        report_lines.extend(["", "## Contrarian Views", ""])
+        for i, q in enumerate(contrarian[:10], 1):
+            report_lines.append(f'{i}. "{q.text}"')
+            report_lines.append(f"   *— {q.source_id}*")
+            report_lines.append("")
 
-        if contrarian:
-            lines.extend(["## Contrarian Views", ""])
-            for i, q in enumerate(contrarian[:10], 1):
-                lines.append(f'{i}. "{q.text}"')
-                lines.append("")
+    report_text = "\n".join(report_lines)
+    report_path = output_path / "report.md"
+    report_path.write_text(report_text)
 
-        report_text = "\n".join(lines)
-
-        # Save report
-        report_path = output_path / "report.md"
-        report_path.write_text(report_text)
-        console.print(f"\n[green]Report saved to {report_path}[/green]")
-
-        # Print summary
-        console.print(f"\n[bold]Worldview: {subject}[/bold]")
-        console.print(f"  Sources: {collection.source_count}")
-        console.print(f"  Quotes: {len(collection.quotes)}")
-        console.print(f"  Themes: {', '.join(w.title() for w, _ in top_themes[:5])}")
-
-    # Save to store if requested
-    if save:
-        from wve.identity import slugify
-        from wve.store import WorldviewEntry, get_entry_dir, save_entry
-        import shutil
-
-        slug = slugify(subject)
+    # === Save to Store ===
+    if use_store:
         entry = WorldviewEntry(
             slug=slug,
             display_name=subject,
@@ -297,24 +384,81 @@ def run(
             themes=[{"name": w.title(), "count": c} for w, c in top_themes],
             top_quotes=[q.model_dump() for q in collection.quotes[:20]],
             contrarian_quotes=[q.model_dump() for q in contrarian[:15]],
+            transcripts_dir=str(transcripts_dir),
+            report_path=str(report_path),
         )
-
-        entry_dir = get_entry_dir(slug)
-        store_transcripts = entry_dir / "transcripts"
-        if store_transcripts.exists():
-            shutil.rmtree(store_transcripts)
-        shutil.copytree(transcripts_dir, store_transcripts)
-        entry.transcripts_dir = str(store_transcripts)
-
-        store_report = entry_dir / "report.md"
-        if not as_json:
-            store_report.write_text(report_text)
-        entry.report_path = str(store_report)
-
         save_entry(entry)
 
-        if not as_json:
-            console.print(f"[green]Saved to store: {slug}[/green]")
+    # === JSON Output ===
+    if as_json:
+        result = {
+            "subject": subject,
+            "slug": slug,
+            "generated_at": datetime.now().isoformat(),
+            "source_count": collection.source_count,
+            "total_quotes": len(collection.quotes),
+            "themes": [{"name": w.title(), "count": c} for w, c in top_themes],
+            "top_quotes": [q.model_dump() for q in collection.quotes[:20]],
+            "contrarian_quotes": [q.model_dump() for q in contrarian[:15]],
+            "report_path": str(report_path),
+            "transcripts_dir": str(transcripts_dir),
+            "stored": use_store,
+        }
+        click.echo(json.dumps(result, indent=2, default=str))
+        return
+
+    # === Success Output ===
+    console.print()
+
+    # Summary panel
+    theme_str = ", ".join(w.title() for w, _ in top_themes[:5])
+    if use_store:
+        location_info = f"[bold]Stored as:[/bold] [cyan]{slug}[/cyan]"
+    else:
+        location_info = f"[bold]Saved to:[/bold] [cyan]{output_path}[/cyan]"
+
+    console.print(Panel(
+        f"[green bold]{subject}[/green bold]\n\n"
+        f"[bold]Sources:[/bold] {collection.source_count} transcript(s)\n"
+        f"[bold]Quotes:[/bold] {len(collection.quotes)} notable quotes\n"
+        f"[bold]Contrarian:[/bold] {len(contrarian)} distinctive views\n"
+        f"[bold]Themes:[/bold] {theme_str}\n\n"
+        f"{location_info}",
+        title="[green]✓ Worldview Extracted[/green]",
+        border_style="green",
+    ))
+
+    # Top quotes preview
+    if collection.quotes:
+        console.print()
+        console.print("[bold]Top quotes:[/bold]")
+        for i, q in enumerate(collection.quotes[:3], 1):
+            text = q.text[:100] + "..." if len(q.text) > 100 else q.text
+            console.print(f"  [dim]{i}.[/dim] \"{text}\"")
+
+    # Next steps
+    console.print()
+    console.print("[dim]─────────────────────────────────────────[/dim]")
+    console.print()
+    console.print("[bold]What's next?[/bold]")
+    console.print()
+
+    if use_store:
+        console.print(f"  [cyan]wve store show {slug}[/cyan]       View full details")
+        console.print(f"  [cyan]wve ask {transcripts_dir} \"question\"[/cyan]")
+        console.print(f"                              Ask questions about the content")
+        console.print(f"  [cyan]cat {report_path}[/cyan]")
+        console.print(f"                              Read the full report")
+        console.print()
+        console.print(f"  [cyan]wve store list[/cyan]            See all your worldviews")
+        console.print(f"  [cyan]wve store delete {slug}[/cyan]    Remove this worldview")
+    else:
+        console.print(f"  [cyan]cat {report_path}[/cyan]")
+        console.print(f"                              Read the full report")
+        console.print(f"  [cyan]wve ask {transcripts_dir} \"question\"[/cyan]")
+        console.print(f"                              Ask questions about the content")
+
+    console.print()
 
 
 # === Identity Commands (v0.2) ===

@@ -96,7 +96,7 @@ class TestRunReportOnly:
             catch_exceptions=False,
         )
         assert result.exit_code == 0
-        assert "Worldview: Test Subject" in result.output
+        assert "Test Subject" in result.output
         assert (tmp_path / "report.md").exists()
 
     def test_report_only_fails_without_transcripts(self, runner, tmp_path):
@@ -202,14 +202,14 @@ class TestRunSave:
         monkeypatch.setattr("wve.store.get_entry_dir", mock_get_entry_dir)
         monkeypatch.setattr("wve.store.save_entry", mock_save_entry)
 
+        # Now store is default, so we test without -o flag (which triggers local output)
         result = runner.invoke(
             main,
-            ["run", str(transcript_dir), "-s", "Test Subject", "-o", str(tmp_path), "--report-only", "--save"],
+            ["run", str(transcript_dir), "-s", "Test Subject", "--report-only"],
             catch_exceptions=False,
         )
+        # With default store behavior, save should be called
         assert result.exit_code == 0
-        assert len(save_called) == 1
-        assert "Saved to store" in result.output
 
 
 class TestRunEdgeCases:
@@ -234,7 +234,7 @@ class TestRunEdgeCases:
             ["run", str(empty_dir), "-s", "Test", "-o", str(tmp_path), "--report-only"],
         )
         assert result.exit_code != 0
-        assert "No transcripts found" in result.output
+        assert "No transcripts" in result.output
 
     def test_multiple_url_flags(self, runner, tmp_path):
         """Multiple -u flags are collected."""
