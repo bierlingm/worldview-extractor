@@ -29,7 +29,7 @@ class MainMenu(Screen):
             yield Static(LOGO, id="logo")
             yield Static(f"[dim]{TAGLINE}[/dim]", id="tagline")
             yield Static("")
-            yield Static("[n] new extraction  [b] browse library  [a] ask  [q] quit")
+            yield Static("  [bold cyan]n[/] new extraction    [bold cyan]b[/] browse library    [bold cyan]a[/] ask    [bold cyan]q[/] quit", id="hints")
     
     def action_new(self) -> None:
         self.app.push_screen(WizardScreen())
