@@ -168,9 +168,13 @@ class WizardScreen(Screen):
         subject_quoted = f'"{self.state.subject}"'
         
         if self.state.source_type == "search":
-            cmd_parts = ["wve", "discover", subject_quoted, "-o", "candidates.json"]
+            # Full pipeline: discover -> auto-accept likely -> fetch -> analyze
+            cmd_parts = ["wve", "-S", subject_quoted, "-s", "-y"]
         elif self.state.source_type == "channel":
-            cmd_parts = ["wve", "from-channel", self.state.channel_url, "-s", subject_quoted]
+            # from-channel downloads transcripts, then run analysis
+            cmd_parts = ["wve", "from-channel", self.state.channel_url, "-o", "transcripts"]
+            cmd_parts.append("&&")
+            cmd_parts.extend(["wve", "run", "transcripts", "-s", subject_quoted, "--report-only"])
         elif self.state.source_type == "urls":
             cmd_parts = ["wve", "run", "-s", subject_quoted]
             for url in self.state.urls:
