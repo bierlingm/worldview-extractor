@@ -1,157 +1,103 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+## [0.7.0] "Shuttle" - 2026-01-29
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [0.5.0] - 2026-01-29 "Central Library"
-
-### Changed
-
-**Central store is now the default** — Worldviews are automatically saved to `~/.wve/store/{slug}/` instead of the current directory. This creates a persistent library of all extracted worldviews.
-
-- Use `-o <path>` to save locally instead
-- Use `wve store list` to see your collection
-- Use `wve store show <slug>` to view details
-
-**Enhanced UX with rich output**:
-- Progress bars with spinners during downloads
-- Success panel showing summary stats
-- Top quote previews in terminal output
-- Contextual "What's next?" suggestions
-- Helpful error messages with recovery tips
-
-### Fixed
-
-- Theme tokenization now properly strips punctuation (no more "It'S" or trailing commas)
-- Expanded stopwords to filter contractions and filler words
-
-## [0.4.0] - 2026-01-29 "One Shot"
+The **Shuttle** release rebuilds the TUI from the ground up as a keyboard-first, prompt-based interface inspired by fzf, lazygit, and gum.
 
 ### Added
 
-**`wve run` — One-Shot Extraction**
+- **Keyboard-first TUI v2** - Completely redesigned interface
+  - Stripped all Header/Footer/Button chrome - feels like terminal prompts now
+  - Single-keypress actions everywhere (j/k nav, space toggle, enter confirm)
+  - Key hints visible at bottom of every screen
 
-The new primary entry point for Weave. Go from URL to worldview report in a single command:
+- **Standard Keybindings** (`wve/tui/keys.py`)
+  - Vim-style navigation (j/k/h/l, arrows)
+  - Consistent bindings: Enter=confirm, Esc/q=back, Space=toggle, Tab=preview
 
-```bash
-wve run https://youtube.com/watch?v=xyz -s "Person Name"
-```
+- **Prompt Components** (`wve/prompts/`)
+  - `FuzzySelect` - fzf-style fuzzy filtering with match count
+  - `MultiSelect` - Space to toggle, a=all, n=none, Tab=preview
 
-Features:
-- **Auto-detection**: Automatically classifies inputs as URLs, local files, directories, or URL list files
-- **Smart resume**: Skips download if transcripts already exist (use `--force` to override)
-- **Flexible input**: Mix URLs (`-u`), files, and directories in one command
-- **Multiple modes**:
-  - `--fetch-only`: Download transcripts without analysis
-  - `--report-only`: Analyze existing transcripts without downloading
-  - `--save`: Persist to store for later reference
-  - `--json`: JSON output for automation/scripting
+- **Display Components** (`wve/display/`)
+  - `progress_bar()` - Inline progress: `Fetching... ████████░░░░ 8/12 [file.txt]`
+  - `InlineProgress` - Textual widget version
+  - `show_extraction_complete()` - Clean summary without boxes
+  - `format_video_preview()` - Lazy-loaded metadata preview
 
-**Complete test coverage** for the run command (16 tests covering input classification, report generation, JSON output, resume logic, store integration, and edge cases).
+- **Browse Command** - `wve browse` / `wve b` for fuzzy library search
+
+- **Progressive CLI Disclosure**
+  - `wve` = full interactive
+  - `wve "Naval"` = skip subject prompt
+  - `wve "Naval" --search` = skip to YouTube search
+  - `wve "Naval" -s -y` = fully non-interactive
+
+- **Config File** (`~/.config/wve/config.toml`)
+  - Customizable keybindings, colors, defaults
+  - Works without config file
 
 ### Changed
 
-- README completely rewritten with comprehensive documentation
-- `wve run` is now the recommended entry point (replaces `pipeline` for most use cases)
-- All output modes documented with examples
+- **Inline Wizard** - Replaced multi-screen wizard with single-screen state machine
+- **Ask Integration** - Replaced broken Ollama RAG with clipboard-based approach
+  - Builds context prompt and copies to clipboard
+  - Optional agent launch via `WVE_AGENT` env or config
 
-### Migration from 0.3.x
+### Removed
 
-The old workflow still works:
-```bash
-# Old way (still supported)
-wve search "Person" -o search.json
-wve transcripts search.json -o transcripts/
-wve report transcripts/ -s "Person"
-
-# New way (recommended)
-wve run "https://youtube.com/watch?v=..." -s "Person"
-```
+- Modal screens with push_screen/pop_screen
+- Button widgets throughout
+- App-like chrome (borders, containers styled like windows)
 
 ---
 
-## [0.3.0] - 2026-01-15
+## [0.6.0] "Loom" - 2026-01-29
+
+The **Loom** release weaves a rich, delightful terminal experience into wve.
 
 ### Added
 
-- `wve ingest` command for arbitrary text sources (markdown, PDF, raw text)
-- Substack article ingestion
-- PDF text extraction
+- **Interactive TUI** - Run `wve` without arguments to launch full Textual app
+  - Main menu with keyboard navigation
+  - Multi-step extraction wizard (subject → source → confirm → run)
+  - Library browser with split-pane view
+  - Ask interface with streaming responses
+  
+- **Theme System** (`wve/theme.py`)
+  - Consistent color palette across all commands
+  - `get_console()` for themed Rich output
+  
+- **Branding** (`wve/branding.py`)
+  - ASCII logo and tagline
+  - `print_banner()` for command headers
+  
+- **UI Components** (`wve/ui/`)
+  - `completion_panel()` - Consistent success output with next steps
+  - `error_panel()` - Styled error messages with suggestions
+  - `StageProgress` - Multi-stage progress tracking with nested items
+  - `ProgressContext` - Context manager for live progress display
+
+- **Auto-install prompt** - When textual not installed, offers to install it
 
 ### Changed
 
-- Improved quote extraction heuristics
-- Better handling of transcript noise
+- `wve run` now shows branded banner and uses themed completion panels
+- Legacy commands hidden from `--help` (still work for scripting):
+  - `pipeline` → use `wve run`
+  - `search` → use `wve discover`
+  - `transcripts` → use `wve run` or `wve fetch`
+  - `extract` → use `wve themes` or `wve quotes`
+  - `cluster` → use `wve themes`
+  - `synthesize` → use `wve run`
+
+### Dependencies
+
+- Added `textual>=0.50.0` as optional `[tui]` extra
+- Added `textual-dev>=1.0.0` to dev dependencies
 
 ---
 
-## [0.2.0] - 2026-01-02
+## [0.5.0] - Previous Release
 
-### Added
-
-**Identity System**
-- `wve identity create` - Create identity profiles with channels, aliases, websites
-- `wve identity list` - List all identities
-- `wve identity show` - Show identity details
-- `wve identity add-channel` - Add YouTube channel to identity
-- `wve identity add-video` - Add confirmed/rejected videos
-- `wve identity delete` - Delete identity
-
-**Discovery Commands**
-- `wve discover` - Search with classification (likely/uncertain/false_positive)
-- `wve confirm` - Mark videos as confirmed/rejected (batch or interactive)
-- `wve fetch` - Download transcripts for confirmed videos
-
-**Source Commands**
-- `wve from-channel` - Scrape all videos from a YouTube channel
-- `wve from-urls` - Process manually curated video URLs
-- `wve from-rss` - Ingest from RSS/Atom feeds (YouTube RSS supported)
-
-**Analysis Commands**
-- `wve quotes` - Extract notable quotes with heuristics
-- `wve themes` - Extract themes with supporting quotes
-- `wve contrast` - Find contrarian/distinctive beliefs
-- `wve report` - Generate comprehensive markdown report
-- `wve refine` - Interactive search refinement for identity
-
-**Persistent Store**
-- `wve store save` - Save worldview extraction
-- `wve store list` - List stored worldviews
-- `wve store show` - Show stored worldview details
-- `wve store search` - Search by name/tag
-- `wve store delete` - Delete stored worldview
-
-**Quote-Grounded Synthesis**
-- `synthesize_grounded()` - LLM synthesis backed by verbatim quotes
-- Every worldview point must cite actual quotes
-
-### Changed
-
-- Default workflow is now identity-first, not search-first
-- Classification heuristics consider identity context
-- All commands support `--json` for automation/AI mode
-- Status messages go to stderr, data to stdout in JSON mode
-
-### Fixed
-
-- Identity resolution for common names
-- Keyword extraction losing signal (now uses actual quotes)
-
----
-
-## [0.1.0] - 2025-12-15
-
-### Added
-
-Initial release:
-- Video search via yt-dlp
-- Transcript download with VTT preprocessing
-- Keyword extraction (YAKE, TF-IDF, NER)
-- Semantic clustering (sentence-transformers)
-- Worldview synthesis (quick/medium/deep modes)
-- RAG-style Q&A with `wve ask`
-- Full pipeline command
-- Artifact inspection with `wve inspect`
-- Transcript concatenation with `wve dump`
+Initial v0.2 architecture with identity management, discovery workflow, and persistent store.
