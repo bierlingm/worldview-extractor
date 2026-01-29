@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "weave"
-version = "0.3.0"
+version = "0.4.0"
 description = "Weave - Comprehensive synthesis tool for distilling intellectual worldviews from arbitrary text sources (videos, articles, tweets, books, podcasts)"
 readme = "README.md"
 license = "MIT"

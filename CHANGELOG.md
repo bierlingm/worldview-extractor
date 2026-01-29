@@ -5,6 +5,66 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-01-29 "One Shot"
+
+### Added
+
+**`wve run` — One-Shot Extraction**
+
+The new primary entry point for Weave. Go from URL to worldview report in a single command:
+
+```bash
+wve run https://youtube.com/watch?v=xyz -s "Person Name"
+```
+
+Features:
+- **Auto-detection**: Automatically classifies inputs as URLs, local files, directories, or URL list files
+- **Smart resume**: Skips download if transcripts already exist (use `--force` to override)
+- **Flexible input**: Mix URLs (`-u`), files, and directories in one command
+- **Multiple modes**:
+  - `--fetch-only`: Download transcripts without analysis
+  - `--report-only`: Analyze existing transcripts without downloading
+  - `--save`: Persist to store for later reference
+  - `--json`: JSON output for automation/scripting
+
+**Complete test coverage** for the run command (16 tests covering input classification, report generation, JSON output, resume logic, store integration, and edge cases).
+
+### Changed
+
+- README completely rewritten with comprehensive documentation
+- `wve run` is now the recommended entry point (replaces `pipeline` for most use cases)
+- All output modes documented with examples
+
+### Migration from 0.3.x
+
+The old workflow still works:
+```bash
+# Old way (still supported)
+wve search "Person" -o search.json
+wve transcripts search.json -o transcripts/
+wve report transcripts/ -s "Person"
+
+# New way (recommended)
+wve run "https://youtube.com/watch?v=..." -s "Person"
+```
+
+---
+
+## [0.3.0] - 2026-01-15
+
+### Added
+
+- `wve ingest` command for arbitrary text sources (markdown, PDF, raw text)
+- Substack article ingestion
+- PDF text extraction
+
+### Changed
+
+- Improved quote extraction heuristics
+- Better handling of transcript noise
+
+---
+
 ## [0.2.0] - 2026-01-02
 
 ### Added
@@ -34,6 +94,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `wve report` - Generate comprehensive markdown report
 - `wve refine` - Interactive search refinement for identity
 
+**Persistent Store**
+- `wve store save` - Save worldview extraction
+- `wve store list` - List stored worldviews
+- `wve store show` - Show stored worldview details
+- `wve store search` - Search by name/tag
+- `wve store delete` - Delete stored worldview
+
 **Quote-Grounded Synthesis**
 - `synthesize_grounded()` - LLM synthesis backed by verbatim quotes
 - Every worldview point must cite actual quotes
@@ -41,22 +108,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Default workflow is now identity-first, not search-first
-- Classification heuristics consider identity context (own channel, trusted channels, confirmed/rejected history)
+- Classification heuristics consider identity context
 - All commands support `--json` for automation/AI mode
 - Status messages go to stderr, data to stdout in JSON mode
 
 ### Fixed
 
-- Identity resolution for common names (no longer returns Kristen Bell for "Kristian Bell")
-- Keyword extraction losing signal (now uses actual quotes instead of generic keywords)
+- Identity resolution for common names
+- Keyword extraction losing signal (now uses actual quotes)
 
-## [0.1.0] - 2025-12-XX
+---
 
-Initial release with:
+## [0.1.0] - 2025-12-15
+
+### Added
+
+Initial release:
 - Video search via yt-dlp
 - Transcript download with VTT preprocessing
 - Keyword extraction (YAKE, TF-IDF, NER)
-- Semantic clustering
+- Semantic clustering (sentence-transformers)
 - Worldview synthesis (quick/medium/deep modes)
 - RAG-style Q&A with `wve ask`
 - Full pipeline command
+- Artifact inspection with `wve inspect`
+- Transcript concatenation with `wve dump`
