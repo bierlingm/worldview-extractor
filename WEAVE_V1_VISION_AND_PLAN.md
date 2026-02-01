@@ -182,11 +182,11 @@ versions: id, entity_id, version_num, created_at, data_hash, author
 
 ## PART 3: COMPLETE WORK BREAKDOWN
 
-### Phase 1: Foundation & Compatibility (2-3 weeks, ~175 hours)
+### Phase 1: Foundation & Compatibility
 
 **Goal:** Professional architecture foundation. After this phase, weave works with multiple harnesses, proper storage, and can extract worldviews.
 
-**Task 1.1: Harness Architecture & Multi-LLM Support** (40-50h)
+**Task 1.1: Harness Architecture & Multi-LLM Support**
 - Implement trait-based harness abstraction
 - Detect & support: Claude, Ollama, LM Studio, vLLM, Llamafile, OpenAI
 - Default Claude with graceful fallback chain
@@ -195,7 +195,7 @@ versions: id, entity_id, version_num, created_at, data_hash, author
 - **Research:** LLM_HARNESS_INTEGRATION.md sections 1-3
 - **Blocks:** All synthesis features
 
-**Task 1.2: Python Format Compatibility & Storage Refactoring** (30-35h)
+**Task 1.2: Python Format Compatibility & Storage Refactoring**
 - Migrate from Python pickle to professional Rust storage
 - Support reading old Python extractions during migration
 - Implement uuid, audit trail logging (JSONL), snapshot versioning
@@ -203,14 +203,14 @@ versions: id, entity_id, version_num, created_at, data_hash, author
 - **Research:** VERSIONED_STORAGE_RESEARCH.md + VERSIONING_IMPLEMENTATION_GUIDE.md Phase 1
 - **Blocks:** Advanced storage features
 
-**Task 1.3: Droid/Factory Harness Detection** (8-10h)
+**Task 1.3: Droid/Factory Harness Detection**
 - Add factory-rs based harness detection
 - Review Openclaw patterns
 - Support droid as first-class harness
 - **Depends on:** 1.1
 - **Blocks:** Agent integration
 
-**Task 1.4: Rust NLP Pipeline Foundation** (20-25h)
+**Task 1.4: Rust NLP Pipeline Foundation**
 - Integrate fastembed (already in place) + rust-bert for NER
 - Implement quote extraction, keyword extraction
 - Setup linfa K-means, LRU embedding cache
@@ -218,25 +218,25 @@ versions: id, entity_id, version_num, created_at, data_hash, author
 - **Research:** RUST_NLP_ECOSYSTEM_RESEARCH.md + RUST_CODE_EXAMPLES.md
 - **Blocks:** Extraction features
 
-**Task 1.5: Unified Ingestion Layer** (25-30h)
+**Task 1.5: Unified Ingestion Layer**
 - Support: YouTube, Substack, Bluesky, markdown, PDF, plain text
 - Auto-detect format with `ingest_auto()`
 - CLI: `wve ingest <input> -o sources/`
 - **Research:** SPECIFICATION.md section 4.1.2
 - **Blocks:** Ghost subscription
 
-**Task 1.6: Configuration System v2** (10-12h)
+**Task 1.6: Configuration System v2**
 - TOML config: ~/.config/wve/config.toml
 - Sections: models, discovery, extraction, analyses, cache, harness routing
 - Commands: `wve config init/show/edit/validate`
 - **Depends on:** 1.1, 1.4
 - **Blocks:** Advanced features
 
-### Phase 2: Ghost Subscription & Ingestion Pipeline (2-3 weeks, ~65-78 hours)
+### Phase 2: Ghost Subscription & Ingestion Pipeline
 
 **Goal:** Continuous content ingestion working. Users can subscribe to sources and get automated updates.
 
-**Task 2.1: Background Job Scheduler & Worker Pool** (20-25h)
+**Task 2.1: Background Job Scheduler & Worker Pool**
 - tokio-cron-scheduler v0.10+ (POSIX cron expressions)
 - governor v0.7+ (rate limiting: 10 req/sec)
 - 5-worker semaphore, graceful shutdown
@@ -245,14 +245,14 @@ versions: id, entity_id, version_num, created_at, data_hash, author
 - **Depends on:** 1.5
 - **Blocks:** 2.2, 2.3
 
-**Task 2.2: Subscription Management Database** (15-18h)
+**Task 2.2: Subscription Management Database**
 - SQLite schema: subscriptions, feed_items, metadata
 - Enable/disable, retry logic (10 strikes = disabled)
 - CLI: `wve subscribe <url> --schedule <cron> --tags <tags>`
 - **Depends on:** 1.2, 2.1
 - **Blocks:** 2.3
 
-**Task 2.3: Feed Aggregation & Change Detection** (18-20h)
+**Task 2.3: Feed Aggregation & Change Detection**
 - feed-rs v0.13+ (RSS/Atom/JSON auto-detect)
 - YouTube RSS feeds, Substack RSS, Podcast Index integration
 - SHA256 content deduplication
@@ -261,7 +261,7 @@ versions: id, entity_id, version_num, created_at, data_hash, author
 - **Depends on:** 2.2
 - **Blocks:** Ghost subscription goes live
 
-**Task 2.4: Daemon & Deployment Support** (12-15h)
+**Task 2.4: Daemon & Deployment Support**
 - systemd service file (Linux)
 - launchd plist (macOS)
 - Health check endpoint (optional warp HTTP server)
@@ -269,11 +269,11 @@ versions: id, entity_id, version_num, created_at, data_hash, author
 - **Depends on:** 2.1, 2.2, 2.3
 - **Blocks:** Production deployment
 
-### Phase 3: Analysis Framework & Configurable Pipelines (3-4 weeks, ~85-98 hours)
+### Phase 3: Analysis Framework & Configurable Pipelines
 
 **Goal:** Users can define custom analyses and compose them into pipelines. Built-in analyses cover worldview extraction, contrarian detection, lie detection, etc.
 
-**Task 3.1: Analysis Prompt System & Registry** (25-30h)
+**Task 3.1: Analysis Prompt System & Registry**
 - User-editable TOML in ~/.config/wve/analyses/
 - Built-in analyses (from BELIEF_EXTRACTION_RESEARCH.md):
   - Worldview extraction (quick/medium/deep)
@@ -287,7 +287,7 @@ versions: id, entity_id, version_num, created_at, data_hash, author
 - **Depends on:** 1.1, 1.6
 - **Blocks:** 3.2, 3.3
 
-**Task 3.2: Pipeline Composition Engine** (20-25h)
+**Task 3.2: Pipeline Composition Engine**
 - YAML pipeline definitions: [extract] → [cluster] → [analyze:interests] → [synthesize]
 - Routing rules (which analyses use which harness)
 - Conditional logic based on extracted data
@@ -295,24 +295,24 @@ versions: id, entity_id, version_num, created_at, data_hash, author
 - **Depends on:** 3.1
 - **Blocks:** Advanced workflows
 
-**Task 3.3: Runcible API Integration (Optional, p3)** (8-12h)
+**Task 3.3: Runcible API Integration (Optional, p3)**
 - Research: What does Runcible provide? (verification layer for AI outputs)
 - Integrate as optional validation analysis
 - Can defer if lower priority
 - **Depends on:** 3.1
 
-**Task 3.4: Output Format Registry** (15-18h)
+**Task 3.4: Output Format Registry**
 - Pluggable renderers: JSON, Markdown, HTML, CSV, SQL
 - Trait-based `Renderer` with `register()` pattern
 - Easy to add custom formats
 - **Depends on:** 1.1
 - **Blocks:** Export features
 
-### Phase 4: Graph-Based Storage & Advanced Features (2-3 weeks, ~110-130 hours)
+### Phase 4: Graph-Based Storage & Advanced Features
 
 **Goal:** Professional graph storage with versioning, comparative analysis, beautiful reports.
 
-**Task 4.1: Knowledge Graph Storage (SQLite Property Graph)** (30-35h)
+**Task 4.1: Knowledge Graph Storage (SQLite Property Graph)**
 - Schema: entities (people, concepts, orgs) + beliefs + relationships + evidence
 - Query APIs: find_beliefs(entity), find_tensions(A, B), find_overlaps([A, B, C])
 - Temporal tracking: belief_version_at(entity, date)
@@ -321,7 +321,7 @@ versions: id, entity_id, version_num, created_at, data_hash, author
 - **Depends on:** 1.2
 - **Blocks:** Advanced queries, comparative analysis
 
-**Task 4.2: Versioned Storage & Auditing** (25-30h)
+**Task 4.2: Versioned Storage & Auditing**
 - Content-addressable snapshots (Phase 1 audit trail → Phase 2 diffs)
 - Immutable audit logs (who, what, when, why)
 - JSON diff library (json-patch RFC 6902)
@@ -331,7 +331,7 @@ versions: id, entity_id, version_num, created_at, data_hash, author
 - **Depends on:** 1.2, 4.1
 - **Blocks:** Rollback, comparative diffs
 
-**Task 4.3: Comparative Analysis System** (20-25h)
+**Task 4.3: Comparative Analysis System**
 - `wve diff <slug1> <slug2>` with rich output
 - `wve movement <slug1> <slug2> <slug3>...` (emergent patterns)
 - Visualize: tensions, agreements, unique beliefs
@@ -339,7 +339,7 @@ versions: id, entity_id, version_num, created_at, data_hash, author
 - **Depends on:** 4.1, 4.2
 - **Blocks:** None
 
-**Task 4.4: HTML Report Generator & Visualizations** (35-40h)
+**Task 4.4: HTML Report Generator & Visualizations**
 - Tera templating + Charming (SVG) + Tailwind CSS + Alpine.js
 - Report sections:
   - Executive summary
@@ -354,11 +354,11 @@ versions: id, entity_id, version_num, created_at, data_hash, author
 - **Depends on:** 1.1, 3.4
 - **Blocks:** Beautiful outputs
 
-### Phase 5: Rich Terminal UI (charmed_rust) (1-2 weeks, ~25-30 hours)
+### Phase 5: Rich Terminal UI (charmed_rust)
 
 **Goal:** Modern TUI with inline prompts, interactive candidate review, keybind customization.
 
-**Task 5.1: TUI v2 Refresh & Modernization** (25-30h)
+**Task 5.1: TUI v2 Refresh & Modernization**
 - Replace old wizard with inline keyboard-driven prompts
 - Interactive candidate review with multi-select (space bar)
 - Keybind configuration (customizable in ~/.config/wve/)
@@ -368,11 +368,11 @@ versions: id, entity_id, version_num, created_at, data_hash, author
 - **Depends on:** 1.4, 2.3
 - **Blocks:** User experience
 
-### Phase 6: Integration & Testing (1-2 weeks, ~50-65 hours)
+### Phase 6: Integration & Testing
 
 **Goal:** Comprehensive testing, documentation, and performance optimization.
 
-**Task 6.1: End-to-End Testing & Quality Assurance** (20-25h)
+**Task 6.1: End-to-End Testing & Quality Assurance**
 - Test workflows: single-subject → comparative → movement → interventions
 - Fixture datasets: Burlingame, Skinner, synthetic corpus
 - Performance benchmarks:
@@ -383,7 +383,7 @@ versions: id, entity_id, version_num, created_at, data_hash, author
 - **Research:** SPECIFICATION.md section 9
 - **Depends on:** All phases complete
 
-**Task 6.2: Documentation & API Reference** (15-18h)
+**Task 6.2: Documentation & API Reference**
 - README.md rewrite (refined vision)
 - SPECIFICATION.md v1.0 update
 - AGENTS.md (integration guide for agents)
@@ -391,25 +391,25 @@ versions: id, entity_id, version_num, created_at, data_hash, author
 - Migration guide (v0.3 → v1.0)
 - **Depends on:** 6.1
 
-**Task 6.3: Performance Optimization & Profiling** (15-20h)
+**Task 6.3: Performance Optimization & Profiling**
 - Profile NLP pipeline, storage queries, HTML generation
 - Optimize hot paths (embedding cache hits, batch processing)
 - Memory targets: <500MB peak
 - Throughput targets: Extract 100 videos in <5 minutes
 - **Depends on:** 6.1
 
-### Phase 7: Release & Cutover (1 week, ~15-20 hours)
+### Phase 7: Release & Cutover
 
 **Goal:** Seamless migration from v0.3 to v1.0, public release.
 
-**Task 7.1: Migration from v0.3 to v1.0** (10-12h)
+**Task 7.1: Migration from v0.3 to v1.0**
 - Automated migration tool (Python format → Rust storage)
 - Data validation scripts (verify all data transferred)
 - Rollback plan and testing
 - **Depends on:** 1.2, 4.2, 6.1
 - **Blocks:** 7.2
 
-**Task 7.2: Release Preparation & Publishing** (5-8h)
+**Task 7.2: Release Preparation & Publishing**
 - Version bump (0.3 → 1.0)
 - CHANGELOG generation (from commits)
 - GitHub release notes
@@ -445,7 +445,6 @@ versions: id, entity_id, version_num, created_at, data_hash, author
 - Each completed task makes subsequent tasks easier
 - Phase 1 foundations enable parallel work in Phases 2-4
 - Dependencies ensure no rework or conflicts
-- Estimated total v1.0 effort: **380-430 hours** (~10-11 weeks at 40h/week)
 
 ---
 

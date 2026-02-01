@@ -88,36 +88,34 @@ Through research and structured interviews, I crystallized your vision into:
 **7 Phases, 24 Interconnected Tasks:**
 
 ```
-Phase 1: Foundation (2-3 weeks, 175h)
-├── Task 1.1: Harness Architecture & Multi-LLM Support (40-50h) ← START HERE
-├── Task 1.2: Storage Refactoring (30-35h)
-├── Task 1.3: Droid/Factory Detection (8-10h)
-├── Task 1.4: Rust NLP Pipeline (20-25h) ← Can parallelize
-├── Task 1.5: Unified Ingestion (25-30h) ← Can parallelize
-└── Task 1.6: Configuration System (10-12h)
+Phase 1: Foundation
+├── Task 1.1: Harness Architecture & Multi-LLM Support ← START HERE
+├── Task 1.2: Storage Refactoring
+├── Task 1.3: Droid/Factory Detection
+├── Task 1.4: Rust NLP Pipeline ← Can parallelize
+├── Task 1.5: Unified Ingestion ← Can parallelize
+└── Task 1.6: Configuration System
 
-Phase 2: Ghost Subscriptions (2-3 weeks, 65-78h)
-├── Task 2.1: Background Job Scheduler (20-25h)
-├── Task 2.2: Subscription Database (15-18h)
-├── Task 2.3: Feed Aggregation (18-20h)
-└── Task 2.4: Daemon & Deployment (12-15h)
+Phase 2: Ghost Subscriptions
+├── Task 2.1: Background Job Scheduler
+├── Task 2.2: Subscription Database
+├── Task 2.3: Feed Aggregation
+└── Task 2.4: Daemon & Deployment
 
-Phase 3: Analysis Pipelines (3-4 weeks, 85-98h)
-├── Task 3.1: Analysis Prompt Registry (25-30h)
-├── Task 3.2: Pipeline Composition Engine (20-25h)
-├── Task 3.3: Runcible Integration [OPTIONAL] (8-12h)
-└── Task 3.4: Output Format Registry (15-18h)
+Phase 3: Analysis Pipelines
+├── Task 3.1: Analysis Prompt Registry
+├── Task 3.2: Pipeline Composition Engine
+├── Task 3.3: Runcible Integration [OPTIONAL]
+└── Task 3.4: Output Format Registry
 
-Phase 4: Graph & Reporting (2-3 weeks, 110-130h)
-├── Task 4.1: Knowledge Graph Storage (30-35h)
-├── Task 4.2: Versioned Storage & Audit (25-30h)
-├── Task 4.3: Comparative Analysis (20-25h)
-└── Task 4.4: HTML Report Generator (35-40h)
+Phase 4: Graph & Reporting
+├── Task 4.1: Knowledge Graph Storage
+├── Task 4.2: Versioned Storage & Audit
+├── Task 4.3: Comparative Analysis
+└── Task 4.4: HTML Report Generator
 
-Phases 5-7: Polish, Testing, Release (4-5 weeks, 90-115h)
+Phases 5-7: Polish, Testing, Release
 ```
-
-**Total v1.0 Effort:** 380-430 hours (~10-11 weeks at 40h/week)
 
 **Key Dependencies:**
 - Task 1.1 (Harnesses) unblocks everything synthesis-related
@@ -155,9 +153,8 @@ Every major architectural decision is backed by 150+ KB of research:
    - Multi-harness support keeps costs down (local first, Claude on demand)
    - Agent integration hooks (beads, droid) from day one
 
-3. **Realistic effort estimation**
-   - Broke down into 24 tasks with specific hour estimates
-   - Accounted for learning curve, testing, documentation
+3. **Phased approach for flexibility**
+   - Broke down into 24 tasks with clear dependencies
    - Phased approach allows for parallel work and early shipping
 
 4. **Professional-grade architecture**
@@ -217,18 +214,15 @@ Every major architectural decision is backed by 150+ KB of research:
 
 Not just "acceptable" or "reasonable"—**actually well-thought-out**:
 
-✅ **Clear problem:** Understanding what people actually believe is expensive  
-✅ **Novel solution:** Continuous, comparative, graph-based worldview synthesis  
-✅ **Grounded architecture:** Every major decision backed by research  
-✅ **Realistic scope:** 380-430 hours is achievable, not over-optimistic  
-✅ **Proper sequencing:** Dependencies are logical, no hidden rework  
-✅ **Agent-friendly:** Output formats and integration hooks designed for your ecosystem  
-✅ **Professional tooling:** Versioning, auditing, proper data migration  
+✅ **Clear problem:** Understanding what people actually believe is expensive
+✅ **Novel solution:** Continuous, comparative, graph-based worldview synthesis
+✅ **Grounded architecture:** Every major decision backed by research
+✅ **Realistic scope:** Well-defined phases with clear dependencies
+✅ **Proper sequencing:** Dependencies are logical, no hidden rework
+✅ **Agent-friendly:** Output formats and integration hooks designed for your ecosystem
+✅ **Professional tooling:** Versioning, auditing, proper data migration
 
-The main question isn't "is this a good plan?" (it is). The question is **"do you have 10-11 weeks to execute it?"**
-
-If yes: This is buildable and will be genuinely useful.  
-If no: Phase it - do Phase 1 (foundation) first, ship Phase 2 (ghost subscriptions) as a v1.0-alpha, iterate from there.
+The plan supports flexible execution: do Phase 1 (foundation) first, ship Phase 2 (ghost subscriptions) as a v1.0-alpha, iterate from there.
 
 ---
 
