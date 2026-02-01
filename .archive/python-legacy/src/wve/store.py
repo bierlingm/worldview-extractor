@@ -136,3 +136,24 @@ def delete_entry(slug: str) -> bool:
                 f.write(e.model_dump_json() + "\n")
         return True
     return False
+
+
+def store_worldview(
+    slug: str,
+    subject: str,
+    worldview,
+    extraction,
+    clusters,
+    report_path: str,
+) -> Path:
+    """Store a complete worldview extraction result."""
+    entry = WorldviewEntry(
+        slug=slug,
+        display_name=subject,
+        source_count=len(extraction.sources) if hasattr(extraction, 'sources') else 0,
+        quote_count=len(extraction.quotes) if hasattr(extraction, 'quotes') else 0,
+        themes=[{"theme": p.theme, "stance": p.stance} for p in worldview.points[:10]],
+        top_quotes=[q.model_dump() if hasattr(q, 'model_dump') else q for q in (extraction.quotes[:5] if hasattr(extraction, 'quotes') else [])],
+        report_path=report_path,
+    )
+    return save_entry(entry)

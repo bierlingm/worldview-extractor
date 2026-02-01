@@ -1,0 +1,155 @@
+# Weave v1.0: Comprehensive Adversarial Critique & Refinement Engine
+# ================================================================
+# Systematically challenges every assumption, identifies hidden risks,
+# and proposes refinements to the vision and implementation plan.
+
+program weave_adversarial_critique {
+  version "1.0"
+  description "Unbelievably comprehensive adversarial analysis of Weave v1.0"
+
+  # Six parallel adversarial reviewers, each with specific mandate
+
+  spawn analyst "technical-debt-adversary" {
+    role "Identify technical risks, over-engineering, and architectural debt"
+    mandate {
+      - Challenge the Rust-first decision (when would Python be better?)
+      - Question SQLite property graphs vs RDF vs Neo4j (hidden costs?)
+      - Examine the 2.7x speedup claim (at what scale does it matter?)
+      - Challenge fastembed + rust-bert (integration risks?)
+      - Find the hidden complexity in multi-harness routing
+      - Identify vendor lock-in risks (Claude default, Ollama fallback)
+      - Question the 380-430 hour estimate (where are the surprises?)
+    }
+    output "technical-risks.md"
+  }
+
+  spawn analyst "business-model-adversary" {
+    role "Challenge product-market fit, business assumptions, and user needs"
+    mandate {
+      - Who actually needs this? (is the persona real?)
+      - What problem does 'ghost subscriptions' solve that existing RSS readers don't?
+      - Is 'comparative worldview analysis' actually wanted by anyone?
+      - What's the real monetization? (Claude costs could exceed value)
+      - Who are the competitors and what are they missing?
+      - Is the agent-integration story real or aspirational?
+      - What if users just want single-subject analysis? (MVP is too big?)
+    }
+    output "business-risks.md"
+  }
+
+  spawn analyst "research-validity-adversary" {
+    role "Challenge the quality and applicability of research backing"
+    mandate {
+      - Are the 50+ scholarly references actually applicable to engineering decisions?
+      - Does BELIEF_EXTRACTION_RESEARCH.md prove contrarian detection works?
+      - Are the Rust library benchmarks realistic for actual use cases?
+      - Is the graph storage research actually validated for this scale?
+      - Did we miss any critical research that contradicts decisions?
+      - Are we cargo-culting "professional tooling" (versioning, audit trails)?
+      - What if the research is theoretically sound but practically fails?
+    }
+    output "research-validity.md"
+  }
+
+  spawn analyst "execution-risk-adversary" {
+    role "Challenge the feasibility and timeline of implementation"
+    mandate {
+      - Is 40-50 hours enough for harness architecture?
+      - Can one person really do charmed_rust TUI (Phase 5)?
+      - What happens when HTML report generation takes 3x longer than estimated?
+      - Where's the testing time in these estimates?
+      - Will Phase 1 actually unblock Phase 2 or create new blockers?
+      - What's the hidden risk in 'continuous ingestion' (reliability/scaling)?
+      - When do we actually ship something users can use?
+    }
+    output "execution-risks.md"
+  }
+
+  spawn analyst "assumption-adversary" {
+    role "Identify and challenge hidden assumptions"
+    mandate {
+      - Assumption: Multi-harness routing is needed day 1 (really?)
+      - Assumption: SQLite scales to 10K+ worldviews (at what latency?)
+      - Assumption: Users will configure complex analysis pipelines (or use defaults?)
+      - Assumption: Ghost subscriptions won't break (rate limits, auth, format changes?)
+      - Assumption: Graph queries are the bottleneck (or is display/synthesis?)
+      - Assumption: Phase dependencies are correct (or hidden interdependencies?)
+      - Assumption: One person can execute all 7 phases (realistic?)
+    }
+    output "hidden-assumptions.md"
+  }
+
+  spawn analyst "alternative-paths-adversary" {
+    role "Propose radically different approaches"
+    mandate {
+      - What if we shipped Python first, ported to Rust later?
+      - What if we started with single-LLM (Claude only), added others in v1.1?
+      - What if ghost subscriptions were a v1.1 feature, not v1.0?
+      - What if we used vector DB (Qdrant) instead of SQLite for storage?
+      - What if we partnered with existing worldview tools instead of building?
+      - What if the real product is 'comparative analysis' only (not single-subject)?
+      - What if we focused on one domain (e.g., AI research) instead of generic?
+    }
+    output "alternative-strategies.md"
+  }
+
+  spawn analyst "blind-spot-adversary" {
+    role "Find what we're not seeing"
+    mandate {
+      - What did we not ask the user about?
+      - What success metrics are missing?
+      - What failure modes aren't we tracking?
+      - What's the silent killer feature we missed?
+      - What's the user actually going to build vs what we designed?
+      - What's the ethical/privacy issue we haven't addressed?
+      - What's going to be technologically obsolete by the time we ship?
+    }
+    output "blind-spots.md"
+  }
+
+  # Synthesis phase: All critics collaborate
+
+  synthesis "comprehensive-adversarial-critique" {
+    inputs [
+      "technical-risks.md",
+      "business-risks.md",
+      "research-validity.md",
+      "execution-risks.md",
+      "hidden-assumptions.md",
+      "alternative-strategies.md",
+      "blind-spots.md"
+    ]
+
+    mandate {
+      1. Identify the single most critical flaw (if any)
+      2. Identify the 3-5 most dangerous hidden assumptions
+      3. Identify 2-3 execution risks that could cause total project failure
+      4. Propose concrete refinements to the vision (not incremental tweaks)
+      5. Propose a modified plan that addresses the top 10 risks
+      6. Score overall plan quality: 1-10 (with honest reasoning)
+      7. Determine: Should this plan proceed as-is, proceed with modifications, or restart?
+      8. For each phase, identify the "brittle point" (most likely to fail)
+      9. Create a risk register with mitigation strategies
+      10. Propose 3 fallback strategies if major assumptions break
+    }
+
+    output "WEAVE_ADVERSARIAL_CRITIQUE_FINAL_REPORT.md"
+  }
+
+  # Outcome: Refined vision based on critique
+
+  refinement "plan-refinement" {
+    source "WEAVE_ADVERSARIAL_CRITIQUE_FINAL_REPORT.md"
+
+    tasks {
+      - Update WEAVE_V1_VISION_AND_PLAN.md with refinements
+      - Add risk register to .beads/ (new tasks for top 10 risks)
+      - Propose modified timeline accounting for identified risks
+      - Create fallback strategies document
+      - Update beads dependencies based on new blockers identified
+      - Create decision log: what we're keeping, what we're changing, why
+    }
+
+    output "WEAVE_V1_REFINED_POST_CRITIQUE.md"
+  }
+}

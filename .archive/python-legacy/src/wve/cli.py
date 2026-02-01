@@ -57,31 +57,7 @@ def main(ctx: click.Context, debug: bool, subject: str | None, search: bool, cha
                     prefilled_state.channel_url = channel
             
             app = WveApp(prefilled_state=prefilled_state)
-            result = app.run()
-            
-            # Handle wizard result
-            if result and isinstance(result, dict) and "command" in result:
-                click.echo()
-                click.secho("  Run this command to start extraction:", fg="cyan")
-                click.echo()
-                click.secho(f"    {result['command']}", fg="green", bold=True)
-                click.echo()
-                
-                if click.confirm("  Run it now?", default=True):
-                    import subprocess
-                    import shlex
-                    click.echo()
-                    # Execute the command
-                    subprocess.run(result["command"], shell=True)
-                else:
-                    click.echo()
-                    click.echo("  [Copied to clipboard - paste to run]")
-                    # Try to copy to clipboard
-                    try:
-                        import subprocess
-                        subprocess.run(["pbcopy"], input=result["command"].encode(), check=True)
-                    except Exception:
-                        pass
+            app.run()
                         
         except ImportError:
             # textual not installed, offer to install

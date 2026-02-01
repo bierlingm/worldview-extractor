@@ -1,0 +1,44 @@
+[package]
+name = "wve"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "wve"
+path = "src/main.rs"
+
+[dependencies]
+# charmed_rust TUI ecosystem (vendored)
+bubbletea = { path = "vendor/charmed_rust/crates/bubbletea" }
+lipgloss = { path = "vendor/charmed_rust/crates/lipgloss" }
+bubbles = { path = "vendor/charmed_rust/crates/bubbles" }
+huh = { path = "vendor/charmed_rust/crates/huh" }
+
+# Local embeddings
+fastembed = "4"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Async
+tokio = { version = "1", features = ["full"] }
+
+# Storage
+rusqlite = { version = "0.32", features = ["bundled"] }
+dirs = "5"
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Harness detection
+which = "7"
+toml = "0.8"

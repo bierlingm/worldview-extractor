@@ -266,7 +266,5 @@ class WizardScreen(Screen):
                 pass
         
         elif self.step == STEP_CONFIRM:
-            self.app.exit(result={
-                "state": self.state,
-                "command": self._build_command(),
-            })
+            from wve.tui.execution import ExecutionScreen
+            self.app.push_screen(ExecutionScreen(self.state))
