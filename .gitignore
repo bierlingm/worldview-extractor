@@ -58,3 +58,6 @@ clusters.json
 
 # bv (beads viewer) local config and caches
 .bv/
+
+# werk runtime state
+.werk/
